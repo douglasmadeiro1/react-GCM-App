@@ -1,6 +1,6 @@
 'use client';
 
-import { supabase, formatDate } from '@gcm/shared';
+import { supabase, formatDate } from '../../../shared';
 import { useEffect, useState } from 'react';
 
 export default function TestePage() {
@@ -25,7 +25,6 @@ export default function TestePage() {
       <div className="bg-gray-100 p-4 rounded-lg mb-4">
         <p><strong>Status:</strong> {status}</p>
         <p><strong>Data formatada:</strong> {formatDate('2024-01-15')}</p>
-        <p><strong>Supabase URL:</strong> Configurada via variável de ambiente</p>
       </div>
     </div>
   );
