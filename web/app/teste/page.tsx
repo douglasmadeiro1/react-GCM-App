@@ -1,29 +1,20 @@
-import { supabase, formatDate } from '../shared';
-import { useEffect, useState } from 'react';
+'use client';
 
-export default function TestePage() {
-  const [status, setStatus] = useState('Verificando...');
+import { useState } from 'react';
 
-  useEffect(() => {
-    async function checkSupabase() {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        setStatus(`✅ Supabase conectado! Sessão: ${data.session ? 'Ativa' : 'Inativa'}`);
-      } catch (err: any) {
-        setStatus(`❌ Erro: ${err.message}`);
-      }
-    }
-    checkSupabase();
-  }, []);
+export default function TesteSimplesPage() {
+  const [count, setCount] = useState(0);
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Teste do Shared Package</h1>
-      <div className="bg-gray-100 p-4 rounded-lg mb-4">
-        <p><strong>Status:</strong> {status}</p>
-        <p><strong>Data formatada:</strong> {formatDate('2024-01-15')}</p>
-      </div>
+      <h1 className="text-2xl font-bold mb-4">Teste Simples</h1>
+      <p>Count: {count}</p>
+      <button 
+        onClick={() => setCount(count + 1)}
+        className="px-4 py-2 bg-blue-500 text-white rounded"
+      >
+        Increment
+      </button>
     </div>
   );
 }

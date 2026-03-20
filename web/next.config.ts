@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Remover reactCompiler - não suportado nesta versão
-  transpilePackages: ['@gcm/shared'],
+  transpilePackages: ['shared'],
+  experimental: {
+    optimizePackageImports: ['shared'],
+  },
 };
 
 export default nextConfig;
