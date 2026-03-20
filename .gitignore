@@ -1,0 +1,54 @@
+# Dependências
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.next/
+out/
+.expo/
+web-build/
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.development
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cache
+.cache/
+.parcel-cache/
+.turbo/
+
+# Arquivos temporários
+*.tmp
+*.temp
+
+# Cobertura de testes
+coverage/
+
+# Arquivos do shared que não devem ser commitados
+shared/dist/
+shared/node_modules/
+
+echo "node_modules/" >> C:\dev\GCM-App\.gitignore
+echo "**/node_modules/" >> C:\dev\GCM-App\.gitignore
+echo ".next/" >> C:\dev\GCM-App\.gitignore
+echo ".expo/" >> C:\dev\GCM-App\.gitignore
