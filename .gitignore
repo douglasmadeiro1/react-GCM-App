@@ -46,7 +46,7 @@ coverage/
 
 # Arquivos do shared que não devem ser commitados
 shared/dist/
-shared/node_modules/
+shared/node_mozdules/
 
 echo "node_modules/" >> C:\dev\GCM-App\.gitignore
 echo "**/node_modules/" >> C:\dev\GCM-App\.gitignore

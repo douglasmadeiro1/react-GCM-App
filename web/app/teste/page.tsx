@@ -1,6 +1,4 @@
-'use client';
-
-import { supabase, formatDate } from '../../../shared';
+import { supabase, formatDate } from '../shared';
 import { useEffect, useState } from 'react';
 
 export default function TestePage() {
