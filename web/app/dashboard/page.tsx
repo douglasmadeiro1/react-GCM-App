@@ -32,7 +32,7 @@ const modules = [
     icon: '🚓',
     path: '/vehicles',
     permission: 'podeVisualizar',
-    color: 'bg-yellow-500',
+    color: 'bg-orange-500',
   },
   {
     id: 'fuel',

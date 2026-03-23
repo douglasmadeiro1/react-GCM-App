@@ -15,15 +15,15 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navigation = [
-    { name: 'Dashboard', icon: '📊', path: '/dashboard' },
-    { name: 'Equipe', icon: '👥', path: '/agents' },
-    { name: 'Patrimônio', icon: '🔫', path: '/patrimonio' },
-    { name: 'Viaturas', icon: '🚓', path: '/vehicles' },
-    { name: 'Combustível', icon: '⛽', path: '/fuel' },
-    { name: 'Autuações', icon: '📝', path: '/infringements' },
-    { name: 'Notificações', icon: '🔔', path: '/notifications' },
-    { name: 'Documentos', icon: '📄', path: '/documents' },
-  ];
+  { name: 'Dashboard', icon: '📊', path: '/dashboard' },
+  { name: 'Equipe', icon: '👥', path: '/agents' },
+  { name: 'Patrimônio', icon: '🔫', path: '/patrimonio' },
+  { name: 'Viaturas', icon: '🚓', path: '/vehicles' },      // ← Adicionar esta linha
+  { name: 'Combustível', icon: '⛽', path: '/fuel' },
+  { name: 'Autuações', icon: '📝', path: '/infringements' },
+  { name: 'Notificações', icon: '🔔', path: '/notifications' },
+  { name: 'Documentos', icon: '📄', path: '/documents' },
+];
 
   // Adicionar gerenciamento de usuários apenas para gestores
   if (userLevel === 'gestor') {
