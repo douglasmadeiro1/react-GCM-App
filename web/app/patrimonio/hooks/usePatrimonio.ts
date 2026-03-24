@@ -7,6 +7,16 @@ import type { PatrimonioItem, TipoItem, StatusItem } from '../types';
 export function usePatrimonio() {
   const queryClient = useQueryClient();
 
+
+  // Função auxiliar para parsear campos JSON
+function parseJsonField(field: any, defaultValue: any = []): any {
+  if (!field) return defaultValue;
+  try {
+    return typeof field === 'string' ? JSON.parse(field) : field;
+  } catch {
+    return defaultValue;
+  }
+}
   // Buscar todos os itens
   const { data: items, isLoading, error } = useQuery({
     queryKey: ['patrimonio'],
@@ -136,70 +146,187 @@ export function usePatrimonio() {
 
   // Cautelar item para um agente
   const cautelarItem = useMutation({
-    mutationFn: async ({ itemId, agenteId, dataCautela, dataPrevista, observacoes }: {
-      itemId: number;
-      agenteId: number;
-      dataCautela: string;
-      dataPrevista?: string;
-      observacoes?: string;
-    }) => {
-      const { data: user } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from('patrimonio')
-        .update({
-          status: 'cautelado',
-          agente_id: agenteId,
-          data_cautela: dataCautela,
-          data_devolucao_prevista: dataPrevista || null,
-          cautelado_por: user.user?.id,
-          observacoes: observacoes ? `Cautela: ${observacoes}` : null,
-        })
-        .eq('id', itemId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patrimonio'] });
-      window.dispatchEvent(new CustomEvent('patrimonio-updated', {
-        detail: { acao: 'cautela' }
-      }));
-    },
-  });
+  mutationFn: async ({ itemId, agenteId, dataCautela, dataPrevista, observacoes }: {
+    itemId: number;
+    agenteId: number;
+    dataCautela: string;
+    dataPrevista?: string;
+    observacoes?: string;
+  }) => {
+    const { data: user } = await supabase.auth.getUser();
+    
+    // 1. Buscar o item para saber o tipo
+    const { data: item } = await supabase
+      .from('patrimonio')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+    
+    // 2. Atualizar patrimônio
+    const { data, error } = await supabase
+      .from('patrimonio')
+      .update({
+        status: 'cautelado',
+        agente_id: agenteId,
+        data_cautela: dataCautela,
+        data_devolucao_prevista: dataPrevista || null,
+        cautelado_por: user.user?.id,
+        observacoes: observacoes ? `Cautela: ${observacoes}` : null,
+      })
+      .eq('id', itemId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // 3. Buscar o agente para adicionar o item
+    const { data: agente } = await supabase
+      .from('agentes')
+      .select('*')
+      .eq('id', agenteId)
+      .single();
+    
+    // 4. Adicionar ao array do agente
+    const campoArray = item.tipo === 'arma' ? 'Armas' : 'Coletes';
+    const arrayAtual = parseJsonField(agente[campoArray], []);
+    
+    const novoItem = {
+      patrimonio_id: item.id,
+      marca: item.marca,
+      modelo: item.modelo,
+      numero_patrimonio: item.numero_patrimonio,
+      numero_serie: item.numero_serie,
+      dataCautela: dataCautela,
+      ...(item.tipo === 'arma' && {
+        calibre: item.calibre,
+        craf: item.craf,
+        carregador: item.capacidade_carregador || 0,
+      }),
+      ...(item.tipo === 'colete' && {
+        tamanho: item.tamanho,
+        sexo: item.sexo,
+        validade: item.data_validade,
+      }),
+    };
+    
+    arrayAtual.unshift(novoItem);
+    
+    await supabase
+      .from('agentes')
+      .update({ [campoArray]: JSON.stringify(arrayAtual) })
+      .eq('id', agenteId);
+    
+    // 5. Registrar no histórico
+    await supabase
+      .from('historico_patrimonio')
+      .insert([{
+        item_id: itemId,
+        acao: 'cautela',
+        agente_id: agenteId,
+        agente_nome: agente.Funcional,
+        data_movimentacao: new Date().toISOString(),
+        observacoes: observacoes,
+      }]);
+    
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patrimonio'] });
+    queryClient.invalidateQueries({ queryKey: ['agents'] });
+    // Disparar evento para sincronizar com agentes
+    window.dispatchEvent(new CustomEvent('patrimonio-updated', {
+      detail: { acao: 'cautela' }
+    }));
+  },
+});
 
   // Devolver item
   const devolverItem = useMutation({
-    mutationFn: async ({ itemId, agenteId, observacoes }: {
-      itemId: number;
-      agenteId: number;
-      observacoes?: string;
-    }) => {
-      const { data, error } = await supabase
-        .from('patrimonio')
-        .update({
-          status: 'disponivel',
-          agente_id: null,
-          data_cautela: null,
-          data_devolucao_prevista: null,
-          cautelado_por: null,
-        })
-        .eq('id', itemId)
-        .select()
-        .single();
+  mutationFn: async ({ itemId, agenteId, observacoes }: {
+    itemId: number;
+    agenteId: number;
+    observacoes?: string;
+  }) => {
+    // 1. Buscar o item para saber o tipo
+    const { data: item } = await supabase
+      .from('patrimonio')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+    
+    // 2. Atualizar patrimônio
+    const { data, error } = await supabase
+      .from('patrimonio')
+      .update({
+        status: 'disponivel',
+        agente_id: null,
+        data_cautela: null,
+        data_devolucao_prevista: null,
+        cautelado_por: null,
+      })
+      .eq('id', itemId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // 3. Buscar o agente para remover o item
+    const { data: agente } = await supabase
+      .from('agentes')
+      .select('*')
+      .eq('id', agenteId)
+      .single();
+    
+    // 4. Remover do array do agente e adicionar ao histórico
+    const campoArray = item.tipo === 'arma' ? 'Armas' : 'Coletes';
+    const campoHistorico = item.tipo === 'arma' ? 'Historico Armas' : 'Historico Coletes';
+    
+    const arrayAtual = parseJsonField(agente[campoArray], []);
+    const historicoAtual = parseJsonField(agente[campoHistorico], []);
+    
+    const index = arrayAtual.findIndex((a: any) => a.patrimonio_id == itemId);
+    if (index !== -1) {
+      const itemRemovido = arrayAtual[index];
+      arrayAtual.splice(index, 1);
       
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patrimonio'] });
-      window.dispatchEvent(new CustomEvent('patrimonio-updated', {
-        detail: { acao: 'devolucao' }
-      }));
-    },
-  });
+      historicoAtual.unshift({
+        ...itemRemovido,
+        dataDevolucao: new Date().toISOString().split('T')[0],
+        baixado: false,
+      });
+      
+      await supabase
+        .from('agentes')
+        .update({
+          [campoArray]: JSON.stringify(arrayAtual),
+          [campoHistorico]: JSON.stringify(historicoAtual),
+        })
+        .eq('id', agenteId);
+    }
+    
+    // 5. Registrar no histórico
+    await supabase
+      .from('historico_patrimonio')
+      .insert([{
+        item_id: itemId,
+        acao: 'devolucao',
+        agente_id: agenteId,
+        agente_nome: agente.Funcional,
+        data_movimentacao: new Date().toISOString(),
+        observacoes: observacoes,
+      }]);
+    
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['patrimonio'] });
+    queryClient.invalidateQueries({ queryKey: ['agents'] });
+    // Disparar evento para sincronizar com agentes
+    window.dispatchEvent(new CustomEvent('patrimonio-updated', {
+      detail: { acao: 'devolucao' }
+    }));
+  },
+});
 
   return {
     items,

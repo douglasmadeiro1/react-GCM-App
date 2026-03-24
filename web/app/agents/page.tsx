@@ -6,6 +6,8 @@ import { useAuth } from '../../shared/hooks/useAuth';
 import { useAgents } from './hooks/useAgents';
 import { AgentCard } from './components/AgentCard';
 import { AgentForm } from './components/AgentForm';
+import { MaterialModal } from './components/MaterialModal';
+import { CertificateModal } from './components/CertificateModal';
 import Sidebar from '../../components/Sidebar';
 
 export default function AgentsPage() {
@@ -18,6 +20,7 @@ export default function AgentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
   const [viewingAgent, setViewingAgent] = useState<any>(null);
+  const [activeSubModal, setActiveSubModal] = useState<'none' | 'material' | 'certificate' | 'warning'>('none');
 
   const canEdit = user?.nivel === 'gestor';
 
@@ -30,6 +33,11 @@ export default function AgentsPage() {
     if (confirm('Tem certeza que deseja excluir este agente?')) {
       await deleteAgent.mutateAsync(id);
     }
+  };
+
+  const handleUpdate = () => {
+    // Recarregar a lista de agentes após atualizações
+    window.location.reload();
   };
 
   const filteredAgents = agents?.filter((agent) => {
@@ -190,7 +198,7 @@ export default function AgentsPage() {
           }}
         />
 
-        {/* Modal de Visualização - simplificado */}
+        {/* Modal de Visualização Detalhada */}
         {viewingAgent && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -232,6 +240,33 @@ export default function AgentsPage() {
                   </div>
                 </div>
                 
+                {/* Cards dos módulos adicionais */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                  <div
+                    onClick={() => setActiveSubModal('material')}
+                    className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 rounded-lg cursor-pointer hover:shadow-lg transition"
+                  >
+                    <i className="fa-solid fa-gun text-2xl mr-2"></i>
+                    <h3 className="font-bold">Material Bélico</h3>
+                    <p className="text-sm opacity-90">Ver armas, coletes e munições</p>
+                  </div>
+                  
+                  <div
+                    onClick={() => setActiveSubModal('certificate')}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg cursor-pointer hover:shadow-lg transition"
+                  >
+                    <i className="fa-solid fa-certificate text-2xl mr-2"></i>
+                    <h3 className="font-bold">Certificados</h3>
+                    <p className="text-sm opacity-90">Ver certificados e cursos</p>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-lg cursor-pointer hover:shadow-lg transition">
+                    <i className="fa-solid fa-exclamation-triangle text-2xl mr-2"></i>
+                    <h3 className="font-bold">Advertências</h3>
+                    <p className="text-sm opacity-90">Em desenvolvimento</p>
+                  </div>
+                </div>
+                
                 <div className="mt-6 flex justify-end gap-3">
                   {canEdit && (
                     <>
@@ -262,6 +297,27 @@ export default function AgentsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Modais secundários - renderizados sobre o modal principal */}
+        {activeSubModal === 'material' && viewingAgent && (
+          <MaterialModal
+            isOpen={true}
+            onClose={() => setActiveSubModal('none')}
+            agent={viewingAgent}
+            onUpdate={handleUpdate}
+            canEdit={canEdit}
+          />
+        )}
+
+        {activeSubModal === 'certificate' && viewingAgent && (
+          <CertificateModal
+            isOpen={true}
+            onClose={() => setActiveSubModal('none')}
+            agent={viewingAgent}
+            onUpdate={handleUpdate}
+            canEdit={canEdit}
+          />
         )}
       </main>
     </div>

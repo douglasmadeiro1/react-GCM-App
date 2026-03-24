@@ -71,9 +71,9 @@ export interface Certificado {
   dataValidade: string | null;
   tipo: string | null;
   observacoes: string | null;
-  imagem?: string;
-  imagemTipo?: string;
-  originalFilename?: string;
+  imagem?: string | null;
+  imagemTipo?: string | null;
+  originalFilename?: string | null;
   dataCadastro: string;
 }
 

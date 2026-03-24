@@ -9,6 +9,7 @@ import { PatrimonioForm } from './components/PatrimonioForm';
 import { CautelaModal } from './components/CautelaModal';
 import Sidebar from '../../components/Sidebar';
 import type { PatrimonioItem } from './types';
+import { useEffect } from 'react';
 
 export default function PatrimonioPage() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -22,6 +23,20 @@ export default function PatrimonioPage() {
   const [selectedItem, setSelectedItem] = useState<PatrimonioItem | null>(null);
   const [cautelaItem, setCautelaItem] = useState<PatrimonioItem | null>(null);
   const [viewingItem, setViewingItem] = useState<PatrimonioItem | null>(null);
+
+  useEffect(() => {
+  // Escutar eventos de atualização do agente
+  const handleAgenteUpdate = () => {
+    // Recarregar os dados do patrimônio
+    window.location.reload();
+  };
+  
+  window.addEventListener('agente-updated', handleAgenteUpdate);
+  
+  return () => {
+    window.removeEventListener('agente-updated', handleAgenteUpdate);
+  };
+}, []);
 
   const canEdit = user?.nivel === 'gestor';
 

@@ -23,7 +23,9 @@ export function VehicleForm({ isOpen, onClose, vehicle, onSave }: VehicleFormPro
 
   useEffect(() => {
     if (vehicle) {
+      console.log('VehicleForm - Editando veículo:', vehicle);
       setFormData({
+        id: vehicle.id,  // ← IMPORTANTE: manter o ID
         prefixo: vehicle.prefixo || '',
         placa: vehicle.placa || '',
         modelo: vehicle.modelo || '',
@@ -31,6 +33,7 @@ export function VehicleForm({ isOpen, onClose, vehicle, onSave }: VehicleFormPro
         status: vehicle.status || 'Ativa',
       });
     } else {
+      console.log('VehicleForm - Criando novo veículo');
       setFormData({
         prefixo: '',
         placa: '',
@@ -59,13 +62,18 @@ export function VehicleForm({ isOpen, onClose, vehicle, onSave }: VehicleFormPro
     }
 
     try {
-      await onSave({
+      // Passar o objeto completo, incluindo o ID se existir
+      const dataToSave = {
         ...formData,
         prefixo: formData.prefixo?.toUpperCase() || '',
         placa: formData.placa?.toUpperCase().replace(/-/g, '') || '',
-      });
+      };
+      
+      console.log('VehicleForm - Enviando para salvar:', dataToSave);
+      await onSave(dataToSave);
       onClose();
     } catch (err: any) {
+      console.error('VehicleForm - Erro:', err);
       setError(err.message || 'Erro ao salvar viatura');
     } finally {
       setLoading(false);

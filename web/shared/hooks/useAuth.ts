@@ -86,38 +86,44 @@ export function useAuth() {
   }, []);
 
   async function carregarPerfil(supabaseUser: User) {
-    try {
-      // Buscar perfil do usuário na tabela profiles
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .maybeSingle();
+  try {
+    // Buscar perfil do usuário na tabela profiles
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', supabaseUser.id)
+      .maybeSingle();
 
-      const nivel = profile?.nivel_usuario || 'default';
-      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+    console.log('=== CARREGANDO PERFIL ===');
+    console.log('User ID:', supabaseUser.id);
+    console.log('Profile encontrado:', profile);
+    console.log('Erro:', error);
+    console.log('========================');
 
-      setUser({
-        id: supabaseUser.id,
-        email: supabaseUser.email!,
-        nome,
-        nivel,
-        permissoes: PERMISSOES_POR_NIVEL[nivel],
-      });
-    } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
-      // Fallback para usuário sem perfil
-      setUser({
-        id: supabaseUser.id,
-        email: supabaseUser.email!,
-        nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-        nivel: 'default',
-        permissoes: PERMISSOES_POR_NIVEL.default,
-      });
-    } finally {
-      setLoading(false);
-    }
+    const nivel = profile?.nivel_usuario || 'default';
+    const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+
+    setUser({
+      id: supabaseUser.id,
+      email: supabaseUser.email!,
+      nome,
+      nivel,
+      permissoes: PERMISSOES_POR_NIVEL[nivel],
+    });
+  } catch (error) {
+    console.error('Erro ao carregar perfil:', error);
+    // Fallback para usuário sem perfil
+    setUser({
+      id: supabaseUser.id,
+      email: supabaseUser.email!,
+      nome: supabaseUser.email?.split('@')[0] || 'Usuário',
+      nivel: 'default',
+      permissoes: PERMISSOES_POR_NIVEL.default,
+    });
+  } finally {
+    setLoading(false);
   }
+}
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

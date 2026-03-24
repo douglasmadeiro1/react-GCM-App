@@ -1,108 +1,132 @@
 'use client';
 
-import { useAuth } from '../../shared/hooks/useAuth';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import Image from 'next/image';
+import { useAuth } from '../../shared/hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 
-// Definição dos módulos  
+// Definição dos módulos com imagens
 const modules = [
   {
-    id: 'agents',
-    name: 'Gerenciamento da Equipe',
-    description: 'Cadastro e gestão de agentes da GCM',
-    icon: '👥',
-    path: '/agents',
+    id: 'documents',
+    name: 'Documentos',
+    description: 'Documentos utilizados no dia a dia dos plantões',
+    icon: '/assets/image/documentos.png',
+    path: '/documents',
     permission: 'podeVisualizar',
-    color: 'bg-blue-500',
+    color: 'from-blue-500 to-cyan-500',
   },
   {
-    id: 'patrimonio',
-    name: 'Gestão de Patrimônio',
-    description: 'Controle de armas, coletes e materiais cautelados',
-    icon: '🔫',
-    path: '/patrimonio',
+    id: 'notifications',
+    name: 'Notificações',
+    description: 'Gerenciamento das notificações de postura',
+    icon: '/assets/image/notificacao.png',
+    path: '/notifications',
     permission: 'podeVisualizar',
-    color: 'bg-green-500',
+    color: 'from-purple-500 to-pink-500',
+  },
+  {
+    id: 'infringements',
+    name: 'Autuações',
+    description: 'Gerenciamento dos autos de infração',
+    icon: '/assets/image/autuacao.png',
+    path: '/infringements',
+    permission: 'podeVisualizar',
+    color: 'from-red-500 to-orange-500',
   },
   {
     id: 'vehicles',
     name: 'Gerenciamento de Viaturas',
     description: 'Cadastro e manutenção de viaturas',
-    icon: '🚓',
+    icon: '/assets/image/viatura.png',
     path: '/vehicles',
     permission: 'podeVisualizar',
-    color: 'bg-orange-500',
+    color: 'from-yellow-500 to-amber-500',
   },
   {
     id: 'fuel',
     name: 'Consumo de Combustível',
     description: 'Controle de abastecimentos e consumo',
-    icon: '⛽',
+    icon: '/assets/image/combustivel.png',
     path: '/fuel',
     permission: 'podeVisualizar',
-    color: 'bg-orange-500',
+    color: 'from-green-500 to-emerald-500',
   },
   {
-    id: 'infringements',
-    name: 'Autuações',
-    description: 'Gerenciamento de autos de infração',
-    icon: '📝',
-    path: '/infringements',
+    id: 'agents',
+    name: 'Gerenciamento da Equipe',
+    description: 'Cadastro e gestão de agentes da GCM',
+    icon: '/assets/image/equipe.png',
+    path: '/agents',
     permission: 'podeVisualizar',
-    color: 'bg-red-500',
+    color: 'from-blue-600 to-indigo-600',
   },
   {
-    id: 'notifications',
-    name: 'Notificações',
-    description: 'Gerenciamento de notificações de postura',
-    icon: '🔔',
-    path: '/notifications',
+    id: 'patrimonio',
+    name: 'Gestão de Patrimônio',
+    description: 'Controle de armas, coletes e materiais cautelados',
+    icon: '/assets/image/patrimonio.png',
+    path: '/patrimonio',
     permission: 'podeVisualizar',
-    color: 'bg-purple-500',
-  },
-  {
-    id: 'documents',
-    name: 'Documentos',
-    description: 'Documentos utilizados no dia a dia dos plantões',
-    icon: '📄',
-    path: '/documents',
-    permission: 'podeVisualizar',
-    color: 'bg-indigo-500',
+    color: 'from-orange-500 to-red-500',
   },
   {
     id: 'users',
     name: 'Gerenciamento de Usuários',
     description: 'Cadastro e gerenciamento de usuários do sistema',
-    icon: '👤',
+    icon: '/assets/image/background-gcm.jpg',
     path: '/users',
-    permission: 'podeGerenciarUsuarios', // Apenas gestores
-    color: 'bg-gray-500',
+    permission: 'podeGerenciarUsuarios',
+    color: 'from-gray-500 to-gray-700',
   },
 ];
 
 export default function DashboardPage() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
 
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    if (user) {
+      carregarNotificacoes();
     }
-  }, [user, loading, router]);
+  }, [user]);
+
+  const carregarNotificacoes = async () => {
+    // Carregar notificações vencidas
+    try {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      
+      // Aqui você pode buscar do Supabase as notificações
+      // Por enquanto, vamos usar dados mockados
+      const notificacoesMock = [
+        { id: 1, message: 'Notificação de postura vencida', link: '/notifications', type: 'postura' },
+      ];
+      setNotifications(notificacoesMock);
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
-        </div>
+      <div className="flex min-h-screen">
+        <Sidebar userName={user?.nome || ''} userLevel={user?.nivel || 'default'} onLogout={handleLogout} />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Carregando...</p>
+          </div>
+        </main>
       </div>
     );
   }
@@ -114,7 +138,7 @@ export default function DashboardPage() {
     if (module.permission === 'podeGerenciarUsuarios') {
       return user.nivel === 'gestor';
     }
-    return user.permissoes[module.permission as keyof typeof user.permissoes];
+    return true; // Todos podem visualizar os outros módulos
   });
 
   return (
@@ -134,11 +158,18 @@ export default function DashboardPage() {
             <div
               key={module.id}
               onClick={() => router.push(module.path)}
-              className="bg-white rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer transform hover:-translate-y-1 overflow-hidden"
+              className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 overflow-hidden group"
             >
-              <div className={`${module.color} h-2`} />
-              <div className="p-6">
-                <div className="text-4xl mb-4">{module.icon}</div>
+              <div className={`h-2 bg-gradient-to-r ${module.color}`} />
+              <div className="p-6 text-center">
+                <div className="relative w-32 h-32 mx-auto mb-4">
+                  <Image
+                    src={module.icon}
+                    alt={module.name}
+                    fill
+                    className="object-contain group-hover:scale-105 transition-transform"
+                  />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">
                   {module.name}
                 </h3>
@@ -146,6 +177,53 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Notificações - versão simplificada com badge */}
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition"
+            >
+              <i className="fa-solid fa-bell text-xl"></i>
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
+            </button>
+            
+            {showNotifications && (
+              <div className="absolute bottom-14 right-0 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                <div className="p-3 border-b border-gray-200">
+                  <h3 className="font-semibold">Notificações</h3>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <i className="fa-solid fa-check-circle text-2xl mb-2"></i>
+                      <p className="text-sm">Nenhuma notificação pendente</p>
+                    </div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          router.push(notif.link);
+                          setShowNotifications(false);
+                        }}
+                        className="p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <p className="text-sm text-gray-700">{notif.message}</p>
+                        <p className="text-xs text-gray-400 mt-1">Clique para visualizar</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
