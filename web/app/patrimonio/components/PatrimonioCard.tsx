@@ -9,6 +9,7 @@ interface PatrimonioCardProps {
   onDelete: () => void;
   onCautelar?: () => void;
   onDevolver?: () => void;
+  onHistorico?: () => void;
   canEdit: boolean;
 }
 
@@ -33,6 +34,7 @@ export function PatrimonioCard({
   onDelete,
   onCautelar,
   onDevolver,
+  onHistorico,
   canEdit,
 }: PatrimonioCardProps) {
   const getIcon = () => {
@@ -92,54 +94,57 @@ export function PatrimonioCard({
           </p>
         )}
 
-        {canEdit && (
-          <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
-            {item.status === 'disponivel' && onCautelar && (
+        <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+          
+          {canEdit && (
+            <>
+              {item.status === 'disponivel' && onCautelar && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCautelar();
+                  }}
+                  className="text-green-500 hover:text-green-700 transition"
+                  title="Cautelar"
+                >
+                  <i className="fa-solid fa-hand"></i>
+                </button>
+              )}
+              {item.status === 'cautelado' && onDevolver && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDevolver();
+                  }}
+                  className="text-orange-500 hover:text-orange-700 transition"
+                  title="Devolver"
+                >
+                  <i className="fa-solid fa-rotate-left"></i>
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onCautelar();
+                  onEdit();
                 }}
-                className="text-green-500 hover:text-green-700 transition"
-                title="Cautelar"
+                className="text-blue-500 hover:text-blue-700 transition"
+                title="Editar"
               >
-                <i className="fa-solid fa-hand"></i>
+                <i className="fa-solid fa-pen"></i>
               </button>
-            )}
-            {item.status === 'cautelado' && onDevolver && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDevolver();
+                  onDelete();
                 }}
-                className="text-orange-500 hover:text-orange-700 transition"
-                title="Devolver"
+                className="text-red-500 hover:text-red-700 transition"
+                title="Excluir"
               >
-                <i className="fa-solid fa-rotate-left"></i>
+                <i className="fa-solid fa-trash"></i>
               </button>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-              className="text-blue-500 hover:text-blue-700 transition"
-              title="Editar"
-            >
-              <i className="fa-solid fa-pen"></i>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="text-red-500 hover:text-red-700 transition"
-              title="Excluir"
-            >
-              <i className="fa-solid fa-trash"></i>
-            </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

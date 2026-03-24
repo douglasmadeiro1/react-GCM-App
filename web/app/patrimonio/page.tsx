@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { usePatrimonio } from './hooks/usePatrimonio';
@@ -9,11 +9,20 @@ import { PatrimonioForm } from './components/PatrimonioForm';
 import { CautelaModal } from './components/CautelaModal';
 import Sidebar from '../../components/Sidebar';
 import type { PatrimonioItem } from './types';
-import { useEffect } from 'react';
+import { supabase } from '../../shared/services/supabase';
+
 
 export default function PatrimonioPage() {
   const { user, loading: authLoading, logout } = useAuth();
-  const { items, isLoading, saveItem, deleteItem, cautelarItem, devolverItem } = usePatrimonio();
+  const { 
+    items, 
+    isLoading, 
+    saveItem, 
+    deleteItem, 
+    cautelarItem, 
+    devolverItem,
+    getHistorico 
+  } = usePatrimonio();
   const router = useRouter();
 
   const [search, setSearch] = useState('');
@@ -23,20 +32,11 @@ export default function PatrimonioPage() {
   const [selectedItem, setSelectedItem] = useState<PatrimonioItem | null>(null);
   const [cautelaItem, setCautelaItem] = useState<PatrimonioItem | null>(null);
   const [viewingItem, setViewingItem] = useState<PatrimonioItem | null>(null);
-
-  useEffect(() => {
-  // Escutar eventos de atualização do agente
-  const handleAgenteUpdate = () => {
-    // Recarregar os dados do patrimônio
-    window.location.reload();
-  };
-  
-  window.addEventListener('agente-updated', handleAgenteUpdate);
-  
-  return () => {
-    window.removeEventListener('agente-updated', handleAgenteUpdate);
-  };
-}, []);
+  const [historicoItem, setHistoricoItem] = useState<PatrimonioItem | null>(null);
+  const [historicoList, setHistoricoList] = useState<any[]>([]);
+  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [activeHistoricoTab, setActiveHistoricoTab] = useState(false);
+  const [historicoModalList, setHistoricoModalList] = useState<any[]>([]);
 
   const canEdit = user?.nivel === 'gestor';
 
@@ -79,7 +79,42 @@ export default function PatrimonioPage() {
     setCautelaItem(null);
   };
 
-  // Filtros
+  const carregarHistorico = async (item: PatrimonioItem) => {
+    setHistoricoItem(item);
+    setShowHistoricoModal(true);
+    
+    try {
+      const historico = await getHistorico(item.id);
+      setHistoricoList(historico || []);
+    } catch (error) {
+      console.error('Erro ao carregar histórico:', error);
+      setHistoricoList([]);
+    }
+  };
+
+  const carregarHistoricoParaModal = async (itemId: number) => {
+  try {
+    const { data, error } = await supabase
+      .from('historico_patrimonio')
+      .select('*')
+      .eq('item_id', itemId)
+      .order('data_movimentacao', { ascending: false });
+    
+    if (error) throw error;
+    setHistoricoModalList(data || []);
+  } catch (error) {
+    console.error('Erro ao carregar histórico:', error);
+    setHistoricoModalList([]);
+  }
+};
+
+// Quando abrir o modal de visualização, resetar a aba
+useEffect(() => {
+  if (viewingItem) {
+    setActiveHistoricoTab(false);
+  }
+}, [viewingItem]);
+
   const filteredItems = items?.filter((item) => {
     const matchSearch = !search ||
       item.marca?.toLowerCase().includes(search.toLowerCase()) ||
@@ -120,7 +155,6 @@ export default function PatrimonioPage() {
     { value: 'baixado', label: '❌ Baixado' },
   ];
 
-  // Estatísticas
   const stats = {
     total: items?.length || 0,
     disponiveis: items?.filter(i => i.status === 'disponivel').length || 0,
@@ -227,6 +261,7 @@ export default function PatrimonioPage() {
               onDelete={() => handleDelete(item.id)}
               onCautelar={() => handleCautelar(item)}
               onDevolver={() => handleDevolver(item)}
+              onHistorico={() => carregarHistorico(item)}
               canEdit={canEdit}
             />
           ))}
@@ -266,131 +301,274 @@ export default function PatrimonioPage() {
         )}
 
         {/* Modal de Visualização Detalhada */}
-        {viewingItem && (
+        {/* Modal de Visualização Detalhada */}
+{viewingItem && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <h2 className="text-2xl font-bold">
+            {viewingItem.marca} {viewingItem.modelo || ''}
+          </h2>
+          <button
+            onClick={() => setViewingItem(null)}
+            className="text-gray-400 hover:text-gray-600 text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b mb-4">
+          <button
+            onClick={() => setActiveHistoricoTab(false)}
+            className={`px-4 py-2 font-medium ${
+              !activeHistoricoTab
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📋 Informações
+          </button>
+          <button
+            onClick={() => {
+              setActiveHistoricoTab(true);
+              carregarHistoricoParaModal(viewingItem.id);
+            }}
+            className={`px-4 py-2 font-medium ${
+              activeHistoricoTab
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📜 Histórico ({historicoModalList.length})
+          </button>
+        </div>
+
+        {/* Aba de Informações */}
+        {!activeHistoricoTab && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-gray-600"><strong>Tipo:</strong></p>
+              <p>{viewingItem.tipo === 'arma' ? '🔫 Arma de Fogo' : '🛡️ Colete Balístico'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600"><strong>Status:</strong></p>
+              <p className={`font-medium ${
+                viewingItem.status === 'disponivel' ? 'text-green-600' :
+                viewingItem.status === 'cautelado' ? 'text-blue-600' :
+                viewingItem.status === 'manutencao' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {viewingItem.status === 'disponivel' ? '📦 Disponível' :
+                 viewingItem.status === 'cautelado' ? '🔒 Cautelado' :
+                 viewingItem.status === 'manutencao' ? '🔧 Manutenção' : '❌ Baixado'}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-600"><strong>Nº Patrimônio:</strong></p>
+              <p>{viewingItem.numero_patrimonio || 'N/I'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600"><strong>Nº Série:</strong></p>
+              <p>{viewingItem.numero_serie || 'N/I'}</p>
+            </div>
+
+            {viewingItem.tipo === 'arma' && (
+              <>
+                <div>
+                  <p className="text-gray-600"><strong>Calibre:</strong></p>
+                  <p>{viewingItem.calibre || 'N/I'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600"><strong>CRAF:</strong></p>
+                  <p>{viewingItem.craf || 'N/I'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600"><strong>Carregadores:</strong></p>
+                  <p>{viewingItem.capacidade_carregador || 0}</p>
+                </div>
+              </>
+            )}
+
+            {viewingItem.tipo === 'colete' && (
+              <>
+                <div>
+                  <p className="text-gray-600"><strong>Tamanho:</strong></p>
+                  <p>{viewingItem.tamanho || 'N/I'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600"><strong>Sexo:</strong></p>
+                  <p>{viewingItem.sexo || 'N/I'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600"><strong>Validade:</strong></p>
+                  <p>{viewingItem.data_validade ? new Date(viewingItem.data_validade).toLocaleDateString('pt-BR') : 'N/I'}</p>
+                </div>
+              </>
+            )}
+
+            {viewingItem.status === 'cautelado' && viewingItem.agente_funcional && (
+              <div className="col-span-2">
+                <p className="text-gray-600"><strong>Cautelado para:</strong></p>
+                <p className="text-blue-600 font-medium">{viewingItem.agente_funcional}</p>
+                <p className="text-sm text-gray-500">
+                  Data: {viewingItem.data_cautela ? new Date(viewingItem.data_cautela).toLocaleDateString('pt-BR') : 'N/I'}
+                </p>
+              </div>
+            )}
+
+            <div className="col-span-2">
+              <p className="text-gray-600"><strong>Observações:</strong></p>
+              <p className="text-gray-700">{viewingItem.observacoes || 'Sem observações'}</p>
+            </div>
+
+            <div className="col-span-2">
+              <p className="text-gray-600"><strong>Cadastrado em:</strong></p>
+              <p className="text-sm text-gray-500">
+                {viewingItem.criado_em ? new Date(viewingItem.criado_em).toLocaleString('pt-BR') : 'N/I'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Aba de Histórico */}
+        {activeHistoricoTab && (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {historicoModalList.length === 0 ? (
+              <div className="text-center py-12">
+                <i className="fa-solid fa-timeline text-4xl text-gray-300 mb-3"></i>
+                <p className="text-gray-500">Nenhum registro de histórico encontrado</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  Ao cautelar ou devolver um item, um registro é criado automaticamente.
+                </p>
+              </div>
+            ) : (
+              historicoModalList.map((reg: any, idx: number) => (
+                <div key={idx} className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-semibold">
+                        {reg.acao === 'cautela' && '🔒 Cautelado'}
+                        {reg.acao === 'devolucao' && '🔄 Devolvido'}
+                        {reg.acao === 'edicao' && '✏️ Editado'}
+                        {reg.acao === 'criacao' && '➕ Criado'}
+                        {reg.acao === 'exclusao' && '🗑️ Excluído'}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {new Date(reg.data_movimentacao).toLocaleString('pt-BR')}
+                      </p>
+                      {reg.agente_nome && (
+                        <p className="text-sm text-blue-600 mt-1">
+                          <i className="fa-solid fa-user-shield mr-1"></i>
+                          Agente: {reg.agente_nome}
+                        </p>
+                      )}
+                      {reg.usuario_nome && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          <i className="fa-solid fa-user-check mr-1"></i>
+                          Responsável: {reg.usuario_nome}
+                        </p>
+                      )}
+                      {reg.observacoes && (
+                        <p className="text-sm text-gray-500 mt-2 italic bg-white p-2 rounded">
+                          "{reg.observacoes}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {canEdit && (
+          <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
+            <button
+              onClick={() => {
+                setSelectedItem(viewingItem);
+                setViewingItem(null);
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+            >
+              Editar
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('Excluir este item?')) {
+                  deleteItem.mutateAsync(viewingItem.id);
+                  setViewingItem(null);
+                }
+              }}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+            >
+              Excluir
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+        {/* Modal de Histórico */}
+        {showHistoricoModal && historicoItem && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
               <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-center mb-4">
                   <h2 className="text-2xl font-bold">
-                    {viewingItem.marca} {viewingItem.modelo || ''}
+                    Histórico - {historicoItem.marca} {historicoItem.modelo || ''}
                   </h2>
                   <button
-                    onClick={() => setViewingItem(null)}
+                    onClick={() => setShowHistoricoModal(false)}
                     className="text-gray-400 hover:text-gray-600 text-2xl"
                   >
                     ×
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-600"><strong>Tipo:</strong></p>
-                    <p>{viewingItem.tipo === 'arma' ? '🔫 Arma de Fogo' : '🛡️ Colete Balístico'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600"><strong>Status:</strong></p>
-                    <p className={`font-medium ${
-                      viewingItem.status === 'disponivel' ? 'text-green-600' :
-                      viewingItem.status === 'cautelado' ? 'text-blue-600' :
-                      viewingItem.status === 'manutencao' ? 'text-yellow-600' : 'text-red-600'
-                    }`}>
-                      {viewingItem.status === 'disponivel' ? '📦 Disponível' :
-                       viewingItem.status === 'cautelado' ? '🔒 Cautelado' :
-                       viewingItem.status === 'manutencao' ? '🔧 Manutenção' : '❌ Baixado'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600"><strong>Nº Patrimônio:</strong></p>
-                    <p>{viewingItem.numero_patrimonio || 'N/I'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600"><strong>Nº Série:</strong></p>
-                    <p>{viewingItem.numero_serie || 'N/I'}</p>
-                  </div>
-
-                  {viewingItem.tipo === 'arma' && (
-                    <>
-                      <div>
-                        <p className="text-gray-600"><strong>Calibre:</strong></p>
-                        <p>{viewingItem.calibre || 'N/I'}</p>
+                <div className="space-y-3">
+                  {historicoList.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">Nenhum registro encontrado</p>
+                  ) : (
+                    historicoList.map((reg: any, idx: number) => (
+                      <div key={idx} className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold">
+                              {reg.acao === 'cautela' && '🔒 Cautelado'}
+                              {reg.acao === 'devolucao' && '🔄 Devolvido'}
+                              {reg.acao === 'edicao' && '✏️ Editado'}
+                              {reg.acao === 'criacao' && '➕ Criado'}
+                              {reg.acao === 'exclusao' && '🗑️ Excluído'}
+                            </p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Data: {new Date(reg.data_movimentacao).toLocaleString('pt-BR')}
+                            </p>
+                            {reg.agente_nome && (
+                              <p className="text-sm text-blue-600">
+                                <i className="fa-solid fa-user-shield mr-1"></i>
+                                {reg.agente_nome}
+                              </p>
+                            )}
+                            {reg.usuario_nome && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Responsável: {reg.usuario_nome}
+                              </p>
+                            )}
+                            {reg.observacoes && (
+                              <p className="text-sm text-gray-500 mt-2 italic">
+                                "{reg.observacoes}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-gray-600"><strong>CRAF:</strong></p>
-                        <p>{viewingItem.craf || 'N/I'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600"><strong>Carregadores:</strong></p>
-                        <p>{viewingItem.capacidade_carregador || 0}</p>
-                      </div>
-                    </>
+                    ))
                   )}
-
-                  {viewingItem.tipo === 'colete' && (
-                    <>
-                      <div>
-                        <p className="text-gray-600"><strong>Tamanho:</strong></p>
-                        <p>{viewingItem.tamanho || 'N/I'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600"><strong>Sexo:</strong></p>
-                        <p>{viewingItem.sexo || 'N/I'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600"><strong>Validade:</strong></p>
-                        <p>{viewingItem.data_validade ? new Date(viewingItem.data_validade).toLocaleDateString('pt-BR') : 'N/I'}</p>
-                      </div>
-                    </>
-                  )}
-
-                  {viewingItem.status === 'cautelado' && viewingItem.agente_funcional && (
-                    <div className="col-span-2">
-                      <p className="text-gray-600"><strong>Cautelado para:</strong></p>
-                      <p className="text-blue-600 font-medium">{viewingItem.agente_funcional}</p>
-                      <p className="text-sm text-gray-500">
-                        Data: {viewingItem.data_cautela ? new Date(viewingItem.data_cautela).toLocaleDateString('pt-BR') : 'N/I'}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="col-span-2">
-                    <p className="text-gray-600"><strong>Observações:</strong></p>
-                    <p className="text-gray-700">{viewingItem.observacoes || 'Sem observações'}</p>
-                  </div>
-
-                  <div className="col-span-2">
-                    <p className="text-gray-600"><strong>Cadastrado em:</strong></p>
-                    <p className="text-sm text-gray-500">
-                      {viewingItem.criado_em ? new Date(viewingItem.criado_em).toLocaleString('pt-BR') : 'N/I'}
-
-                    </p>
-                  </div>
                 </div>
-
-                {canEdit && (
-                  <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
-                    <button
-                      onClick={() => {
-                        setSelectedItem(viewingItem);
-                        setViewingItem(null);
-                        setIsModalOpen(true);
-                      }}
-                      className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Excluir este item?')) {
-                          deleteItem.mutateAsync(viewingItem.id);
-                          setViewingItem(null);
-                        }
-                      }}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
