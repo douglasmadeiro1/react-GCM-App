@@ -1,54 +1,35 @@
-# Dependências
-node_modules/
-.pnpm-store/
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
 
-# Build
-dist/
-build/
-.next/
-out/
-.expo/
-web-build/
+# testing
+/coverage
 
-# Arquivos de ambiente
-.env
-.env.local
-.env.development
-.env.production
+# next.js
+/.next/
+/out/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# production
+/build
 
-# Sistema operacional
+# misc
 .DS_Store
-Thumbs.db
+*.pem
 
-# Logs
-*.log
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Cache
-.cache/
-.parcel-cache/
-.turbo/
+# local env files
+.env*.local
+.env
 
-# Arquivos temporários
-*.tmp
-*.temp
+# vercel
+.vercel
 
-# Cobertura de testes
-coverage/
-
-# Arquivos do shared que não devem ser commitados
-shared/dist/
-shared/node_mozdules/
-
-echo "node_modules/" >> C:\dev\GCM-App\.gitignore
-echo "**/node_modules/" >> C:\dev\GCM-App\.gitignore
-echo ".next/" >> C:\dev\GCM-App\.gitignore
-echo ".expo/" >> C:\dev\GCM-App\.gitignore
+# typescript
+*.tsbuildinfo
+next-env.d.ts
