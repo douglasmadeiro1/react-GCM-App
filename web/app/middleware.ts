@@ -42,7 +42,8 @@ export async function middleware(req: NextRequest) {
   }
 
   // 🔒 VERIFICAÇÃO DE PERMISSÕES PARA ROTAS ADMINISTRATIVAS
-  const adminRoutes = ['/users'];
+  // web/middleware.ts
+  const adminRoutes = ['/users', '/admin', '/relatorios']; // adicione outras rotas aqui
   const isAdminRoute = adminRoutes.some(route => 
     req.nextUrl.pathname.startsWith(route)
   );
