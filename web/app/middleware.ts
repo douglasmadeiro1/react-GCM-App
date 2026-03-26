@@ -22,7 +22,12 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
+
+  // Log para depuração (visível nos logs do Vercel)
+  console.log('[Middleware] Path:', req.nextUrl.pathname);
+  console.log('[Middleware] Session:', session ? 'Existe' : 'Não existe');
+  if (error) console.error('[Middleware] Erro:', error.message);
 
   // Rotas públicas
   const publicRoutes = ['/login', '/reset-password'];
@@ -30,13 +35,11 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname.startsWith(route)
   );
 
-  // Se não está logado e tenta acessar rota privada
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL('/login', req.url);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Se está logado e tenta acessar login, redireciona para dashboard
   if (session && req.nextUrl.pathname === '/login') {
     const redirectUrl = new URL('/dashboard', req.url);
     return NextResponse.redirect(redirectUrl);

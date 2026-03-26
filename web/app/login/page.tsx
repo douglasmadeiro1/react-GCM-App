@@ -21,21 +21,10 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
+      console.error('Erro no login:', err);
       setError(err.message || 'Erro ao fazer login');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleRecovery = async () => {
-    if (!email) {
-      setError('Digite seu email para recuperar a senha');
-      return;
-    }
-    try {
-      alert(`Email de recuperação enviado para ${email}`);
-    } catch (err: any) {
-      setError(err.message);
     }
   };
 
@@ -84,7 +73,7 @@ export default function LoginPage() {
 
         <div className="mt-4 text-center">
           <button
-            onClick={handleRecovery}
+            onClick={() => alert('Recuperação de senha')}
             className="text-blue-600 hover:underline text-sm"
           >
             Recuperar senha
