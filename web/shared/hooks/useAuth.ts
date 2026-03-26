@@ -167,5 +167,16 @@ export function useAuth() {
     if (error) throw error;
   };
 
-  return { user, loading, login, logout, resetPassword };
+  // Adicione esta função no hook useAuth
+const isGestor = () => {
+  return user?.nivel === 'gestor';
+};
+
+const isAdmin = () => {
+  return user?.nivel === 'administrador';
+};
+
+// Adicione no retorno do hook
+return { user, loading, login, logout, resetPassword, isGestor, isAdmin };
+
 }
