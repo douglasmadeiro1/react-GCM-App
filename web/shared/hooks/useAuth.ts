@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { User } from '@supabase/supabase-js';
@@ -54,24 +56,83 @@ const PERMISSOES_POR_NIVEL: Record<string, Permissoes> = {
   },
 };
 
+// Flag para evitar múltiplas chamadas simultâneas
+let isInitializing = false;
+
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        carregarPerfil(session.user);
-      } else {
-        setLoading(false);
+    let isMounted = true;
+    let subscription: any = null;
+
+    async function initialize() {
+      if (isInitializing) return;
+      isInitializing = true;
+
+      try {
+        // Verificar sessão atual
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user && isMounted) {
+          await carregarPerfil(session.user);
+        } else if (isMounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar sessão:', error);
+        if (isMounted) setLoading(false);
+      } finally {
+        isInitializing = false;
       }
-    });
+    }
+
+    async function carregarPerfil(supabaseUser: User) {
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', supabaseUser.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        const nivel = profile?.nivel_usuario || 'default';
+        const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+
+        setUser({
+          id: supabaseUser.id,
+          email: supabaseUser.email!,
+          nome,
+          nivel,
+          permissoes: PERMISSOES_POR_NIVEL[nivel],
+        });
+      } catch (error) {
+        console.error('Erro ao carregar perfil:', error);
+        if (isMounted) {
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email!,
+            nome: supabaseUser.email?.split('@')[0] || 'Usuário',
+            nivel: 'default',
+            permissoes: PERMISSOES_POR_NIVEL.default,
+          });
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    initialize();
 
     // Escutar mudanças na autenticação
-    const { data: subscription } = supabase.auth.onAuthStateChange(
+    const { data: authSubscription } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        if (!isMounted) return;
+        
         if (session?.user) {
+          setLoading(true);
           await carregarPerfil(session.user);
         } else {
           setUser(null);
@@ -80,50 +141,15 @@ export function useAuth() {
       }
     );
 
+    subscription = authSubscription;
+
     return () => {
-      subscription?.subscription.unsubscribe();
+      isMounted = false;
+      if (subscription?.subscription) {
+        subscription.subscription.unsubscribe();
+      }
     };
   }, []);
-
-  async function carregarPerfil(supabaseUser: User) {
-  try {
-    // Buscar perfil do usuário na tabela profiles
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', supabaseUser.id)
-      .maybeSingle();
-
-    console.log('=== CARREGANDO PERFIL ===');
-    console.log('User ID:', supabaseUser.id);
-    console.log('Profile encontrado:', profile);
-    console.log('Erro:', error);
-    console.log('========================');
-
-    const nivel = profile?.nivel_usuario || 'default';
-    const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
-
-    setUser({
-      id: supabaseUser.id,
-      email: supabaseUser.email!,
-      nome,
-      nivel,
-      permissoes: PERMISSOES_POR_NIVEL[nivel],
-    });
-  } catch (error) {
-    console.error('Erro ao carregar perfil:', error);
-    // Fallback para usuário sem perfil
-    setUser({
-      id: supabaseUser.id,
-      email: supabaseUser.email!,
-      nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-      nivel: 'default',
-      permissoes: PERMISSOES_POR_NIVEL.default,
-    });
-  } finally {
-    setLoading(false);
-  }
-}
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
