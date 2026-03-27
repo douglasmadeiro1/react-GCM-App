@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -57,16 +57,21 @@ const PERMISSOES_POR_NIVEL: Record<string, Permissoes> = {
 };
 
 let isInitializing = false;
+// Cache para evitar recarregamentos desnecessários
+let cachedUser: AuthUser | null = null;
+let cachedLoading = true;
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(cachedUser);
+  const [loading, setLoading] = useState(cachedLoading);
+  const isMountedRef = useRef(true);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     let subscription: any = null;
 
-    async function carregarPerfil(supabaseUser: User, isMounted: boolean) {
+    async function carregarPerfil(supabaseUser: User) {
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -74,80 +79,99 @@ export function useAuth() {
           .eq('id', supabaseUser.id)
           .maybeSingle();
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
         const nivel = profile?.nivel_usuario || 'default';
         const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
 
-        setUser({
+        const newUser = {
           id: supabaseUser.id,
           email: supabaseUser.email!,
           nome,
           nivel,
           permissoes: PERMISSOES_POR_NIVEL[nivel],
-        });
+        };
+        
+        cachedUser = newUser;
+        setUser(newUser);
       } catch (error) {
         console.error('Erro ao carregar perfil:', error);
-        if (isMounted) {
-          setUser({
+        if (isMountedRef.current) {
+          const fallbackUser = {
             id: supabaseUser.id,
             email: supabaseUser.email!,
             nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-            nivel: 'default',
+            nivel: 'default' as const,
             permissoes: PERMISSOES_POR_NIVEL.default,
-          });
+          };
+          cachedUser = fallbackUser;
+          setUser(fallbackUser);
         }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMountedRef.current) {
+          cachedLoading = false;
+          setLoading(false);
+        }
       }
     }
 
     async function initialize() {
-      if (isInitializing) return;
+      if (isInitializing || initializedRef.current) return;
       isInitializing = true;
+      initializedRef.current = true;
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user && isMounted) {
-          await carregarPerfil(session.user, isMounted);
-        } else if (isMounted) {
+        if (session?.user && isMountedRef.current) {
+          await carregarPerfil(session.user);
+        } else if (isMountedRef.current) {
+          cachedLoading = false;
           setLoading(false);
         }
       } catch (error) {
         console.error('Erro ao verificar sessão:', error);
-        if (isMounted) setLoading(false);
+        if (isMountedRef.current) {
+          cachedLoading = false;
+          setLoading(false);
+        }
       } finally {
         isInitializing = false;
       }
     }
 
-    initialize();
+    // Só inicializa se ainda não foi inicializado
+    if (!initializedRef.current) {
+      initialize();
+    } else {
+      // Se já foi inicializado, usa o cache
+      setUser(cachedUser);
+      setLoading(cachedLoading);
+    }
 
     // Escutar mudanças na autenticação
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
         
-        // CORREÇÃO: Só atualiza se o evento for SIGNED_IN ou SIGNED_OUT
-        // Ignora eventos como TOKEN_REFRESHED que não devem resetar o loading
-        if (event === 'SIGNED_IN') {
-          if (session?.user) {
-            setLoading(true);
-            await carregarPerfil(session.user, isMounted);
-          }
+        // Só atualiza para eventos de login/logout
+        if (event === 'SIGNED_IN' && session?.user) {
+          setLoading(true);
+          await carregarPerfil(session.user);
         } else if (event === 'SIGNED_OUT') {
+          cachedUser = null;
+          cachedLoading = false;
           setUser(null);
           setLoading(false);
         }
-        // Para outros eventos (como TOKEN_REFRESHED), não faz nada
+        // Ignora TOKEN_REFRESHED e outros eventos
       }
     );
 
     subscription = authSubscription;
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       if (subscription?.subscription) {
         subscription.subscription.unsubscribe();
       }

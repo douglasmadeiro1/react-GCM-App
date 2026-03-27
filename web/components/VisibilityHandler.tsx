@@ -2,22 +2,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from '../shared/hooks/useAuth';
 
 export function VisibilityHandler() {
-  const { user, loading } = useAuth();
-
   useEffect(() => {
-    const handleVisibilityChange = async () => {
-      // Quando voltar para a aba e NÃO estiver em loading
+    const handleVisibilityChange = () => {
       if (!document.hidden) {
-        console.log('[VisibilityHandler] Voltei para a aba, loading:', loading, 'user:', user?.nome);
-        
-        // Se estava em loading mas o usuário já existe, algo deu errado
-        if (loading && user) {
-          console.log('[VisibilityHandler] Detectado estado inconsistente, recarregando...');
-          window.location.reload();
-        }
+        console.log('[VisibilityHandler] Aba visível novamente');
+        // Não faz nada - o useAuth já mantém o estado via cache
       }
     };
 
@@ -26,7 +17,7 @@ export function VisibilityHandler() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [loading, user]);
+  }, []);
 
   return null;
 }
