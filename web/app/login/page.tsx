@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../shared/hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext'; // AJUSTE AQUI
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const router = useRouter();
   const { user, loading: authLoading, login } = useAuth();
 
-  // Redirecionar se já estiver logado
   useEffect(() => {
     if (!authLoading && user) {
       router.replace('/dashboard');
@@ -22,13 +22,13 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    
+
     setError('');
     setIsSubmitting(true);
 
     try {
       await login(email, password);
-      // Não redirecionar aqui - o useEffect fará isso
+      // redirecionamento automático via useEffect
     } catch (err: any) {
       console.error('Erro no login:', err);
       setError(err.message || 'Email ou senha inválidos');
@@ -36,7 +36,6 @@ export default function LoginPage() {
     }
   };
 
-  // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 to-gray-900">
@@ -48,16 +47,15 @@ export default function LoginPage() {
     );
   }
 
-  // Se já estiver logado, não renderizar o formulário
-  if (user) {
-    return null;
-  }
+  if (user) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 to-gray-900">
       <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">GCM - Sistema de Gestão</h1>
-        
+        <h1 className="text-2xl font-bold text-center mb-6">
+          GCM - Sistema de Gestão
+        </h1>
+
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {error}
@@ -71,7 +69,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               required
               disabled={isSubmitting}
             />
@@ -83,7 +81,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               required
               disabled={isSubmitting}
             />
@@ -97,15 +95,6 @@ export default function LoginPage() {
             {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => alert('Recuperação de senha')}
-            className="text-blue-600 hover:underline text-sm"
-          >
-            Recuperar senha
-          </button>
-        </div>
       </div>
     </div>
   );
