@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '../../shared/services/supabase';
@@ -99,13 +99,15 @@ export default function DashboardPage() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [hasError, setHasError] = useState(false);
+  const redirectingRef = useRef(false); // Previne múltiplos redirecionamentos
 
-  // Redirecionar se não estiver autenticado
+  // Redirecionar se não estiver autenticado (apenas uma vez)
   useEffect(() => {
-    if (!authLoading && !user && !hasError) {
+    if (!authLoading && !user && !redirectingRef.current) {
+      redirectingRef.current = true;
       router.replace('/login');
     }
-  }, [user, authLoading, hasError, router]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     console.log('[Dashboard] Estado:', {
@@ -150,7 +152,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    // O redirecionamento será feito pelo useEffect acima
   };
 
   const handleRetry = () => {

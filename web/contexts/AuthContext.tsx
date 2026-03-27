@@ -85,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isInitializedRef = useRef(false);
   const loadingProfileRef = useRef(false);
   const userRef = useRef<AuthUser | null>(null);
+  const isLoggingOutRef = useRef(false); // Previne múltiplos SIGNED_OUT
 
   async function carregarPerfil(supabaseUser: User) {
     if (loadingProfileRef.current) return;
@@ -162,9 +163,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isInitializedRef.current) return;
 
         if (event === 'SIGNED_OUT') {
+          // Previne múltiplos SIGNED_OUT
+          if (isLoggingOutRef.current) return;
+          isLoggingOutRef.current = true;
+          
+          console.log('[Auth] SIGNED_OUT processado');
           setUser(null);
           userRef.current = null;
           setLoading(false);
+          
+          // Reset após um tempo
+          setTimeout(() => {
+            isLoggingOutRef.current = false;
+          }, 1000);
           return;
         }
 
@@ -204,9 +215,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    userRef.current = null;
+    try {
+      await supabase.auth.signOut();
+      // O estado será atualizado pelo onAuthStateChange
+    } catch (error) {
+      console.error('Erro no logout:', error);
+      // Força o logout local se houver erro
+      setUser(null);
+      userRef.current = null;
+    }
   };
 
   const resetPassword = async (email: string) => {
