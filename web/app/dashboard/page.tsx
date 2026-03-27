@@ -98,23 +98,22 @@ export default function DashboardPage() {
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [isRedirecting, setIsRedirecting] = useState(false);
   const [hasError, setHasError] = useState(false);
 
   // Redirecionar se não estiver autenticado
   useEffect(() => {
-    if (!authLoading && !user && !isRedirecting && !hasError) {
-      setIsRedirecting(true);
+    if (!authLoading && !user && !hasError) {
       router.replace('/login');
     }
-  }, [user, authLoading, router, isRedirecting, hasError]);
-    useEffect(() => {
-  console.log('[Dashboard] Estado:', { 
-    authLoading, 
-    userNome: user?.nome,
-    timestamp: new Date().toISOString()
-  });
-}, [authLoading, user]);
+  }, [user, authLoading, hasError, router]);
+
+  useEffect(() => {
+    console.log('[Dashboard] Estado:', {
+      authLoading,
+      userNome: user?.nome,
+      timestamp: new Date().toISOString()
+    });
+  }, [authLoading, user]);
 
   const carregarNotificacoes = useCallback(async () => {
     try {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../contexts/AuthContext'; // AJUSTE AQUI
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -27,11 +27,15 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
-      // redirecionamento automático via useEffect
+      const success = await login(email, password);
+      if (!success) {
+        setError('Email ou senha inválidos');
+      }
+      // Redirecionamento automático via useEffect
     } catch (err: any) {
       console.error('Erro no login:', err);
       setError(err.message || 'Email ou senha inválidos');
+    } finally {
       setIsSubmitting(false);
     }
   };

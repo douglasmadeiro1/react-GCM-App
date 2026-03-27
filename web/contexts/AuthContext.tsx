@@ -81,12 +81,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-
   const mountedRef = useRef(true);
-  const initializingRef = useRef(true);
-
-  // 🔥 Evita múltiplas execuções simultâneas
+  const isInitializedRef = useRef(false);
   const loadingProfileRef = useRef(false);
+  const userRef = useRef<AuthUser | null>(null);
 
   async function carregarPerfil(supabaseUser: User) {
     if (loadingProfileRef.current) return;
@@ -106,25 +104,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const nivel = profile?.nivel_usuario || 'default';
-      const nome =
-        profile?.nome ||
-        supabaseUser.email?.split('@')[0] ||
-        'Usuário';
+      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
 
-      setUser({
+      const newUser = {
         id: supabaseUser.id,
         email: supabaseUser.email!,
         nome,
         nivel,
         permissoes: PERMISSOES_POR_NIVEL[nivel],
-      });
+      };
+
+      setUser(newUser);
+      userRef.current = newUser;
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
     } finally {
       loadingProfileRef.current = false;
       if (mountedRef.current) {
         setLoading(false);
-        initializingRef.current = false;
       }
     }
   }
@@ -145,12 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null);
           setLoading(false);
-          initializingRef.current = false;
         }
+        isInitializedRef.current = true;
       } catch (error) {
         console.error('Erro ao iniciar sessão:', error);
+        setUser(null);
         setLoading(false);
-        initializingRef.current = false;
+        isInitializedRef.current = true;
       }
     };
 
@@ -160,12 +158,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event: AuthChangeEvent, session: Session | null) => {
         if (!mountedRef.current) return;
 
-        // 🔥 Ignora eventos durante inicialização
-        if (initializingRef.current) return;
+        // Ignora eventos durante inicialização
+        if (!isInitializedRef.current) return;
 
         if (event === 'SIGNED_OUT') {
           setUser(null);
+          userRef.current = null;
           setLoading(false);
+          return;
+        }
+
+        // Ignora SIGNED_IN se já tiver usuário (evita duplicação)
+        if (event === 'SIGNED_IN' && userRef.current) {
+          console.log('[Auth] Usuário já logado, ignorando SIGNED_IN');
           return;
         }
 
@@ -191,7 +196,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) throw error;
-
       return true;
     } catch (error) {
       console.error('Erro no login:', error);
@@ -202,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    userRef.current = null;
   };
 
   const resetPassword = async (email: string) => {
