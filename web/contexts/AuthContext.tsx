@@ -1,7 +1,6 @@
-// contexts/AuthContext.tsx
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../shared/services/supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -67,41 +66,26 @@ interface AuthContextType {
   isAdmin: () => boolean;
 }
 
-// CORREÇÃO: Criar o contexto com valor padrão undefined
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-// Cache global
-let globalUser: AuthUser | null = null;
-let globalLoading = true;
-let initialized = false;
-let lastUpdateTime = 0;
-const UPDATE_COOLDOWN = 5000;
+// ✅ Melhor padrão
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(globalUser);
-  const [loading, setLoading] = useState(globalLoading);
-  const mountedRef = useRef(true);
-  const initializingRef = useRef(false);
-const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  async function carregarPerfil(supabaseUser: User, forceUpdate = false) {
-    const now = Date.now();
-    
-    if (!forceUpdate && (now - lastUpdateTime) < UPDATE_COOLDOWN && globalUser) {
-      console.log('[Auth] Em cooldown, usando cache');
-      return;
-    }
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  async function carregarPerfil(supabaseUser: User) {
     try {
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .maybeSingle();
 
-      if (!mountedRef.current) return;
-
       const nivel = profile?.nivel_usuario || 'default';
-      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+      const nome =
+        profile?.nome ||
+        supabaseUser.email?.split('@')[0] ||
+        'Usuário';
 
       const newUser: AuthUser = {
         id: supabaseUser.id,
@@ -110,84 +94,48 @@ const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         nivel,
         permissoes: PERMISSOES_POR_NIVEL[nivel],
       };
-      
-      globalUser = newUser;
-      lastUpdateTime = now;
+
       setUser(newUser);
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
-      if (mountedRef.current && !globalUser) {
-        const fallbackUser: AuthUser = {
-          id: supabaseUser.id,
-          email: supabaseUser.email!,
-          nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-          nivel: 'default',
-          permissoes: PERMISSOES_POR_NIVEL.default,
-        };
-        globalUser = fallbackUser;
-        setUser(fallbackUser);
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }
 
-  async function initialize() {
-    if (initializingRef.current || initialized) return;
-    initializingRef.current = true;
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user && mountedRef.current) {
-        await carregarPerfil(session.user, true);
-      } else if (mountedRef.current) {
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Erro ao verificar sessão:', error);
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      // fallback seguro
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email!,
+        nome: supabaseUser.email?.split('@')[0] || 'Usuário',
+        nivel: 'default',
+        permissoes: PERMISSOES_POR_NIVEL.default,
+      });
     } finally {
-      initializingRef.current = false;
-      initialized = true;
-      globalLoading = false;
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    mountedRef.current = true;
-    
-    if (!initialized) {
-      initialize();
-    } else {
-      setUser(globalUser);
-      setLoading(globalLoading);
-    }
-
-    const { data: authData } = supabase.auth.onAuthStateChange(
+    const { data } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mountedRef.current) return;
-        
         console.log('[Auth] Evento:', event);
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          if (updateTimeoutRef.current) {
-            clearTimeout(updateTimeoutRef.current);
+
+        // ✅ sessão inicial (quando abre o app)
+        if (event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            await carregarPerfil(session.user);
+          } else {
+            setLoading(false);
           }
-          
-          setLoading(true);
-          updateTimeoutRef.current = setTimeout(async () => {
-            if (mountedRef.current) {
-              await carregarPerfil(session.user);
-            }
-          }, 100);
-        } else if (event === 'SIGNED_OUT') {
-          globalUser = null;
-          globalLoading = false;
+        }
+
+        // ✅ login REAL (evita loop)
+        if (event === 'SIGNED_IN') {
+          if (!user && session?.user) {
+            setLoading(true);
+            await carregarPerfil(session.user);
+          }
+        }
+
+        // ✅ logout
+        if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
         }
@@ -195,16 +143,15 @@ const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     );
 
     return () => {
-      mountedRef.current = false;
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-      authData?.subscription.unsubscribe();
+      data.subscription.unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
   };
 
@@ -222,18 +169,18 @@ const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isGestor = () => user?.nivel === 'gestor';
   const isAdmin = () => user?.nivel === 'administrador';
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    login,
-    logout,
-    resetPassword,
-    isGestor,
-    isAdmin
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        resetPassword,
+        isGestor,
+        isAdmin,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -241,8 +188,10 @@ const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 }
