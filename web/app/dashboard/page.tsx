@@ -109,8 +109,12 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router, isRedirecting, hasError]);
     useEffect(() => {
-    console.log('[Dashboard] authLoading:', authLoading, 'user:', user?.nome);
-  }, [authLoading, user]);
+  console.log('[Dashboard] Estado:', { 
+    authLoading, 
+    userNome: user?.nome,
+    timestamp: new Date().toISOString()
+  });
+}, [authLoading, user]);
 
   const carregarNotificacoes = useCallback(async () => {
     try {

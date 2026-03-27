@@ -67,20 +67,30 @@ interface AuthContextType {
   isAdmin: () => boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// CORREÇÃO: Criar o contexto com valor padrão undefined
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-// Cache global fora do React
+// Cache global
 let globalUser: AuthUser | null = null;
 let globalLoading = true;
 let initialized = false;
+let lastUpdateTime = 0;
+const UPDATE_COOLDOWN = 5000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(globalUser);
   const [loading, setLoading] = useState(globalLoading);
   const mountedRef = useRef(true);
   const initializingRef = useRef(false);
+const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  async function carregarPerfil(supabaseUser: User, forceUpdate = false) {
+    const now = Date.now();
+    
+    if (!forceUpdate && (now - lastUpdateTime) < UPDATE_COOLDOWN && globalUser) {
+      console.log('[Auth] Em cooldown, usando cache');
+      return;
+    }
 
-  async function carregarPerfil(supabaseUser: User) {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -102,10 +112,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       
       globalUser = newUser;
+      lastUpdateTime = now;
       setUser(newUser);
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
-      if (mountedRef.current) {
+      if (mountedRef.current && !globalUser) {
         const fallbackUser: AuthUser = {
           id: supabaseUser.id,
           email: supabaseUser.email!,
@@ -118,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } finally {
       if (mountedRef.current) {
-        globalLoading = false;
         setLoading(false);
       }
     }
@@ -132,42 +142,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user && mountedRef.current) {
-        await carregarPerfil(session.user);
+        await carregarPerfil(session.user, true);
       } else if (mountedRef.current) {
-        globalLoading = false;
         setLoading(false);
       }
     } catch (error) {
       console.error('Erro ao verificar sessão:', error);
       if (mountedRef.current) {
-        globalLoading = false;
         setLoading(false);
       }
     } finally {
       initializingRef.current = false;
       initialized = true;
+      globalLoading = false;
     }
   }
 
   useEffect(() => {
     mountedRef.current = true;
     
-    // Se já foi inicializado globalmente, usa o cache
-    if (initialized) {
+    if (!initialized) {
+      initialize();
+    } else {
       setUser(globalUser);
       setLoading(globalLoading);
-    } else {
-      initialize();
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: authData } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mountedRef.current) return;
         
-        // Só processa eventos de login/logout
+        console.log('[Auth] Evento:', event);
+        
         if (event === 'SIGNED_IN' && session?.user) {
+          if (updateTimeoutRef.current) {
+            clearTimeout(updateTimeoutRef.current);
+          }
+          
           setLoading(true);
-          await carregarPerfil(session.user);
+          updateTimeoutRef.current = setTimeout(async () => {
+            if (mountedRef.current) {
+              await carregarPerfil(session.user);
+            }
+          }, 100);
         } else if (event === 'SIGNED_OUT') {
           globalUser = null;
           globalLoading = false;
@@ -179,7 +196,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mountedRef.current = false;
-      subscription?.unsubscribe();
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      authData?.subscription.unsubscribe();
     };
   }, []);
 
@@ -202,8 +222,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isGestor = () => user?.nivel === 'gestor';
   const isAdmin = () => user?.nivel === 'administrador';
 
+  const value: AuthContextType = {
+    user,
+    loading,
+    login,
+    logout,
+    resetPassword,
+    isGestor,
+    isAdmin
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, resetPassword, isGestor, isAdmin }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
@@ -211,7 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
