@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { supabase } from '../../shared/services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from '../../components/Sidebar';
@@ -10,29 +9,14 @@ import Sidebar from '../../components/Sidebar';
 export default function DashboardPage() {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
-  const [showNotifications, setShowNotifications] = useState(false);
+
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [hasError, setHasError] = useState(false);
+  const [, setHasError] = useState(false);
 
-  // ✅ REDIRECIONAMENTO CORRETO
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-    }
-  }, [user, authLoading, router]);
-
-  // ✅ LOG CONTROLADO
-  useEffect(() => {
-    if (!user) return;
-
-    console.log('[Dashboard] Estado:', {
-      authLoading,
-      userNome: user?.nome,
-      timestamp: new Date().toISOString(),
-    });
-  }, [authLoading, user]);
-
+  // 1. Defina TODOS os hooks no topo do componente
   const carregarNotificacoes = useCallback(async () => {
+    if (!user) return; // Segurança extra
+
     try {
       const { data, error } = await supabase
         .from('notificacoes')
@@ -42,26 +26,34 @@ export default function DashboardPage() {
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        setNotifications(
-          data.map((n: any) => ({
-            id: n.id,
-            message: `Notificação ${n.numero_notificacao} - ${n.natureza}`,
-            link: '/notifications',
-            type: 'postura',
-          }))
-        );
-      } else {
-        setNotifications([]);
-      }
-
+      setNotifications(data?.map((n: any) => ({
+        id: n.id,
+        message: `Notificação ${n.numero_notificacao} - ${n.natureza}`,
+        link: '/notifications',
+        type: 'postura',
+      })) || []);
       setHasError(false);
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
       setHasError(true);
     }
-  }, []);
+  }, [user]);
 
+  // 2. Redirecionamento
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+  }, [user, authLoading, router]);
+
+  // 3. Log controlado (apenas se houver usuário)
+  useEffect(() => {
+    if (user) {
+      console.log('[Dashboard] Usuário Ativo:', user.nome);
+    }
+  }, [user]);
+
+  // 4. Chamada de dados
   useEffect(() => {
     if (user) {
       carregarNotificacoes();
@@ -72,9 +64,17 @@ export default function DashboardPage() {
     await logout();
   };
 
-  // ✅ BLOQUEIA RENDER COMPLETAMENTE
-  if (authLoading || !user) {
-    return null;
+  // 5. AGORA sim, as proteções de renderização (após todos os hooks)
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Carregando autenticação...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Evita flash de conteúdo antes do redirecionamento
   }
 
   return (
@@ -87,6 +87,7 @@ export default function DashboardPage() {
 
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold">Dashboard</h1>
+        {/* Renderize suas notificações aqui usando o estado 'notifications' */}
       </main>
     </div>
   );
