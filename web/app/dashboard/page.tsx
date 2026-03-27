@@ -108,6 +108,9 @@ export default function DashboardPage() {
       router.replace('/login');
     }
   }, [user, authLoading, router, isRedirecting, hasError]);
+    useEffect(() => {
+    console.log('[Dashboard] authLoading:', authLoading, 'user:', user?.nome);
+  }, [authLoading, user]);
 
   const carregarNotificacoes = useCallback(async () => {
     try {

@@ -66,10 +66,20 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
     let subscription: any = null;
+    let timeoutId: NodeJS.Timeout;
 
     async function initialize() {
       if (isInitializing) return;
       isInitializing = true;
+
+      // Timeout de segurança para não ficar preso no loading
+      timeoutId = setTimeout(() => {
+        if (isMounted && loading) {
+          console.warn('Timeout no carregamento da autenticação');
+          setLoading(false);
+          isInitializing = false;
+        }
+      }, 5000);
 
       try {
         // Verificar sessão atual
@@ -84,6 +94,7 @@ export function useAuth() {
         console.error('Erro ao verificar sessão:', error);
         if (isMounted) setLoading(false);
       } finally {
+        clearTimeout(timeoutId);
         isInitializing = false;
       }
     }
@@ -145,6 +156,7 @@ export function useAuth() {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       if (subscription?.subscription) {
         subscription.subscription.unsubscribe();
       }
@@ -167,16 +179,14 @@ export function useAuth() {
     if (error) throw error;
   };
 
-  // Adicione esta função no hook useAuth
-const isGestor = () => {
-  return user?.nivel === 'gestor';
-};
+  const isGestor = () => {
+    return user?.nivel === 'gestor';
+  };
 
-const isAdmin = () => {
-  return user?.nivel === 'administrador';
-};
+  const isAdmin = () => {
+    return user?.nivel === 'administrador';
+  };
 
-// Adicione no retorno do hook
-return { user, loading, login, logout, resetPassword, isGestor, isAdmin };
-
+  // Retorno único com todas as funções
+  return { user, loading, login, logout, resetPassword, isGestor, isAdmin };
 }

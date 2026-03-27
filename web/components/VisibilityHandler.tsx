@@ -3,32 +3,38 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../shared/hooks/useAuth';
-import { supabase } from '../shared/services/supabase'; // ← ADICIONE ESTA LINHA
+import { supabase } from '../shared/services/supabase';
 
 export function VisibilityHandler() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const isRefreshing = useRef(false);
+  const hasReloaded = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
-
     const handleVisibilityChange = async () => {
-      // Quando voltar para a aba e NÃO estiver em loading
+      // Quando voltar para a aba
       if (!document.hidden && !isRefreshing.current) {
         isRefreshing.current = true;
         
         try {
-          // Apenas verifica se a sessão ainda é válida, não recarrega a página
-          const { data } = await supabase.auth.getSession();
+          // Verifica se a sessão ainda é válida
+          const { data: { session } } = await supabase.auth.getSession();
           
-          if (!data.session) {
-            // Se perdeu a sessão, redireciona suavemente
+          if (!session) {
+            // Se perdeu a sessão, redireciona para login
             window.location.href = '/login';
+          } else if (loading && !hasReloaded.current) {
+            // Se ainda está em loading e já tem sessão, força um recarregamento suave
+            hasReloaded.current = true;
+            console.log('[VisibilityHandler] Forçando recarregamento da página');
+            window.location.reload();
           }
         } catch (error) {
           console.warn('Erro ao verificar sessão ao voltar:', error);
         } finally {
-          isRefreshing.current = false;
+          setTimeout(() => {
+            isRefreshing.current = false;
+          }, 1000);
         }
       }
     };
@@ -38,7 +44,7 @@ export function VisibilityHandler() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user]);
+  }, [loading]);
 
   return null;
 }
