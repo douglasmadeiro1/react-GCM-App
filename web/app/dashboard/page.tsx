@@ -3,11 +3,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { supabase } from '../../shared/services/supabase';
 import { useAuth } from '../../shared/hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 
-// Definição dos módulos com imagens
-const MODULES = [
+// Definição dos módulos com tipos
+interface Module {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  path: string;
+  permission: string;
+  color: string;
+}
+
+const MODULES: Module[] = [
   {
     id: 'documents',
     name: 'Documentos',
@@ -88,24 +99,40 @@ export default function DashboardPage() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  // Redirecionar se não estiver autenticado (apenas uma vez)
+  // Redirecionar se não estiver autenticado
   useEffect(() => {
-    if (!authLoading && !user && !isRedirecting) {
+    if (!authLoading && !user && !isRedirecting && !hasError) {
       setIsRedirecting(true);
       router.replace('/login');
     }
-  }, [user, authLoading, router, isRedirecting]);
+  }, [user, authLoading, router, isRedirecting, hasError]);
 
   const carregarNotificacoes = useCallback(async () => {
     try {
-      // Simulação de notificações - substitua pela chamada real
-      const notificacoesMock = [
-        { id: 1, message: 'Notificação de postura vencida', link: '/notifications', type: 'postura' },
-      ];
-      setNotifications(notificacoesMock);
+      const { data, error } = await supabase
+        .from('notificacoes')
+        .select('*')
+        .in('status', ['pendente', 'vencida'])
+        .limit(10);
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setNotifications(data.map((n: any) => ({
+          id: n.id,
+          message: `Notificação ${n.numero_notificacao} - ${n.natureza}`,
+          link: '/notifications',
+          type: 'postura'
+        })));
+      } else {
+        setNotifications([]);
+      }
+      setHasError(false);
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
+      setHasError(true);
     }
   }, []);
 
@@ -120,7 +147,11 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
-  // Evitar renderização enquanto verifica autenticação
+  const handleRetry = () => {
+    carregarNotificacoes();
+  };
+
+  // Mostrar loading
   if (authLoading) {
     return (
       <div className="flex min-h-screen">
@@ -137,12 +168,35 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  // Filtrar módulos baseado nas permissões do usuário
+  // Se houver erro, mostrar mensagem e botão de recarregar
+  if (hasError) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar userName={user.nome} userLevel={user.nivel} onLogout={handleLogout} />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <i className="fa-solid fa-circle-exclamation text-5xl text-yellow-500 mb-4"></i>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Erro de Conexão</h2>
+            <p className="text-gray-600 mb-4">
+              Não foi possível carregar alguns dados. Sua sessão continua ativa.
+            </p>
+            <button
+              onClick={handleRetry}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const visibleModules = MODULES.filter((mod) => {
     if (mod.permission === 'podeGerenciarUsuarios') {
       return user.nivel === 'gestor';
     }
-    return true; // Todos podem visualizar os outros módulos
+    return true;
   });
 
   return (

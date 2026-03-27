@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -61,6 +61,56 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
   const loadingRef = useRef(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function carregarPerfil(supabaseUser: User) {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .maybeSingle();
+
+      if (!mountedRef.current) return;
+
+      const nivel = profile?.nivel_usuario || 'default';
+      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email!,
+        nome,
+        nivel,
+        permissoes: PERMISSOES_POR_NIVEL[nivel],
+      });
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
+      if (mountedRef.current) {
+        setUser({
+          id: supabaseUser.id,
+          email: supabaseUser.email!,
+          nome: supabaseUser.email?.split('@')[0] || 'Usuário',
+          nivel: 'default',
+          permissoes: PERMISSOES_POR_NIVEL.default,
+        });
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      
+      if (data.session?.user && mountedRef.current) {
+        await carregarPerfil(data.session.user);
+      }
+    } catch (error) {
+      console.warn('Erro ao renovar sessão:', error);
+    }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -68,7 +118,6 @@ export function useAuth() {
     let subscription: any = null;
 
     async function loadUser() {
-      // Evitar múltiplas chamadas simultâneas
       if (loadingRef.current) return;
       loadingRef.current = true;
 
@@ -88,77 +137,57 @@ export function useAuth() {
       }
     }
 
-    async function carregarPerfil(supabaseUser: User) {
-      try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', supabaseUser.id)
-          .maybeSingle();
-
-        if (!mountedRef.current) return;
-
-        const nivel = profile?.nivel_usuario || 'default';
-        const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
-
-        setUser({
-          id: supabaseUser.id,
-          email: supabaseUser.email!,
-          nome,
-          nivel,
-          permissoes: PERMISSOES_POR_NIVEL[nivel],
-        });
-      } catch (error) {
-        console.error('Erro ao carregar perfil:', error);
-        if (mountedRef.current) {
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email!,
-            nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-            nivel: 'default',
-            permissoes: PERMISSOES_POR_NIVEL.default,
-          });
-        }
-      } finally {
-        if (mountedRef.current) setLoading(false);
-      }
-    }
-
     loadUser();
 
-    // Escutar mudanças na autenticação
+    // Configurar renovação automática a cada 10 minutos
+    refreshIntervalRef.current = setInterval(() => {
+      if (mountedRef.current && user) {
+        refreshSession();
+      }
+    }, 10 * 60 * 1000); // 10 minutos
+
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!mountedRef.current) return;
         
-        if (session?.user) {
+        console.log('[Auth] Evento:', event);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
           setLoading(true);
           await carregarPerfil(session.user);
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Token renovado, recarregar perfil
+          await carregarPerfil(session.user);
+        } else if (event === 'USER_UPDATED' && session?.user) {
+          await carregarPerfil(session.user);
         }
       }
     );
 
     subscription = authSubscription;
 
-    // Configurar timeout para evitar loading infinito (10 segundos)
+    // Timeout de segurança
     const timeoutId = setTimeout(() => {
       if (mountedRef.current && loading) {
         console.warn('Timeout ao carregar usuário');
         setLoading(false);
       }
-    }, 10000);
+    }, 15000);
 
     return () => {
       mountedRef.current = false;
       clearTimeout(timeoutId);
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
       if (subscription?.subscription) {
         subscription.subscription.unsubscribe();
       }
     };
-  }, []); // Array de dependências vazio
+  }, [refreshSession]);
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

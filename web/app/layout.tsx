@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SessionKeepAlive } from "../components/SessionKeepAlive";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,12 +27,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <head>
-        {/* Font Awesome CDN */}
         <link
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
         />
-        {/* Boxicons CDN (se necessário) */}
         <link
           href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css"
           rel="stylesheet"
@@ -40,7 +39,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <SessionKeepAlive />
+          {children}
+        </Providers>
       </body>
     </html>
   );
