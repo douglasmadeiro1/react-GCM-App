@@ -99,22 +99,35 @@ export default function DashboardPage() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [hasError, setHasError] = useState(false);
-  const redirectingRef = useRef(false); // Previne múltiplos redirecionamentos
+  const hasRedirected = useRef(false);
 
   // Redirecionar se não estiver autenticado (apenas uma vez)
   useEffect(() => {
-    if (!authLoading && !user && !redirectingRef.current) {
-      redirectingRef.current = true;
+    // Só redireciona se:
+    // 1. Não está mais carregando
+    // 2. Não tem usuário
+    // 3. Ainda não redirecionou
+    if (!authLoading && !user && !hasRedirected.current) {
+      hasRedirected.current = true;
       router.replace('/login');
+    }
+    
+    // Reseta o redirect se o usuário voltar a existir (caso de login bem-sucedido)
+    if (user && hasRedirected.current) {
+      hasRedirected.current = false;
     }
   }, [user, authLoading, router]);
 
+  // Log apenas para debug
   useEffect(() => {
-    console.log('[Dashboard] Estado:', {
-      authLoading,
-      userNome: user?.nome,
-      timestamp: new Date().toISOString()
-    });
+    if (!authLoading) {
+      console.log('[Dashboard] Estado:', {
+        hasUser: !!user,
+        userName: user?.nome,
+        hasRedirected: hasRedirected.current,
+        timestamp: new Date().toISOString()
+      });
+    }
   }, [authLoading, user]);
 
   const carregarNotificacoes = useCallback(async () => {
