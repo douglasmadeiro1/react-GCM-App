@@ -8,7 +8,7 @@ export function VisibilityHandler() {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         console.log('[VisibilityHandler] Aba visível novamente');
-        // Não faz nada - o useAuth já mantém o estado via cache
+        // Não faz nada - o AuthContext mantém o estado via cache global
       }
     };
 

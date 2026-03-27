@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '../../shared/services/supabase';
-import { useAuth } from '../../shared/hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from '../../components/Sidebar';
 
 // Definição dos módulos com tipos
