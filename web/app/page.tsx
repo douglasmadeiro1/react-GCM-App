@@ -1,19 +1,21 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../shared/hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !redirectedRef.current) {
+      redirectedRef.current = true;
       if (user) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       } else {
-        router.push('/login');
+        router.replace('/login');
       }
     }
   }, [user, loading, router]);

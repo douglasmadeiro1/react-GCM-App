@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useRef,
+  useCallback,
 } from 'react';
 import { supabase } from '../shared/services/supabase';
 import {
@@ -85,9 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isInitializedRef = useRef(false);
   const loadingProfileRef = useRef(false);
   const userRef = useRef<AuthUser | null>(null);
-  const isLoggingOutRef = useRef(false); // Previne múltiplos SIGNED_OUT
+  const processingEventRef = useRef(false);
 
-  async function carregarPerfil(supabaseUser: User) {
+  const carregarPerfil = useCallback(async (supabaseUser: User) => {
     if (loadingProfileRef.current) return;
     loadingProfileRef.current = true;
 
@@ -125,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     }
-  }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -157,38 +158,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
+        // Previne processamento simultâneo
+        if (processingEventRef.current) return;
+        
         if (!mountedRef.current) return;
 
         // Ignora eventos durante inicialização
         if (!isInitializedRef.current) return;
 
-        if (event === 'SIGNED_OUT') {
-          // Previne múltiplos SIGNED_OUT
-          if (isLoggingOutRef.current) return;
-          isLoggingOutRef.current = true;
-          
-          console.log('[Auth] SIGNED_OUT processado');
-          setUser(null);
-          userRef.current = null;
-          setLoading(false);
-          
-          // Reset após um tempo
-          setTimeout(() => {
-            isLoggingOutRef.current = false;
-          }, 1000);
-          return;
-        }
+        processingEventRef.current = true;
 
-        // Ignora SIGNED_IN se já tiver usuário (evita duplicação)
-        if (event === 'SIGNED_IN' && userRef.current) {
-          console.log('[Auth] Usuário já logado, ignorando SIGNED_IN');
-          return;
-        }
-
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          if (session?.user) {
-            await carregarPerfil(session.user);
+        try {
+          if (event === 'SIGNED_OUT') {
+            console.log('[Auth] SIGNED_OUT processado');
+            setUser(null);
+            userRef.current = null;
+            setLoading(false);
+            return;
           }
+
+          // Ignora SIGNED_IN se já tiver usuário
+          if (event === 'SIGNED_IN' && userRef.current) {
+            console.log('[Auth] Usuário já logado, ignorando SIGNED_IN');
+            return;
+          }
+
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session?.user) {
+              await carregarPerfil(session.user);
+            }
+          }
+        } finally {
+          processingEventRef.current = false;
         }
       }
     );
@@ -197,9 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mountedRef.current = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [carregarPerfil]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -212,26 +213,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Erro no login:', error);
       return false;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
-      // O estado será atualizado pelo onAuthStateChange
     } catch (error) {
       console.error('Erro no logout:', error);
       // Força o logout local se houver erro
       setUser(null);
       userRef.current = null;
     }
-  };
+  }, []);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) throw error;
-  };
+  }, []);
+
+  const isGestor = useCallback(() => user?.nivel === 'gestor', [user]);
+  const isAdmin = useCallback(() => user?.nivel === 'administrador', [user]);
 
   return (
     <AuthContext.Provider
@@ -241,8 +244,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         resetPassword,
-        isGestor: () => user?.nivel === 'gestor',
-        isAdmin: () => user?.nivel === 'administrador',
+        isGestor,
+        isAdmin,
       }}
     >
       {children}
