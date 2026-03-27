@@ -46,7 +46,7 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router]);
 
-  // 3. Log controlado (apenas se houver usuários)
+  // 3. Log controlado (apenas se houver usuário)
   useEffect(() => {
     if (user) {
       console.log('[Dashboard] Usuário Ativo:', user.nome);
@@ -91,4 +91,4 @@ export default function DashboardPage() {
       </main>
     </div>
   );
-} 
+}
