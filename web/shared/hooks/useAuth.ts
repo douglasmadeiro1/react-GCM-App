@@ -56,7 +56,6 @@ const PERMISSOES_POR_NIVEL: Record<string, Permissoes> = {
   },
 };
 
-// Flag para evitar múltiplas chamadas simultâneas
 let isInitializing = false;
 
 export function useAuth() {
@@ -66,40 +65,8 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
     let subscription: any = null;
-    let timeoutId: NodeJS.Timeout;
 
-    async function initialize() {
-      if (isInitializing) return;
-      isInitializing = true;
-
-      // Timeout de segurança para não ficar preso no loading
-      timeoutId = setTimeout(() => {
-        if (isMounted && loading) {
-          console.warn('Timeout no carregamento da autenticação');
-          setLoading(false);
-          isInitializing = false;
-        }
-      }, 5000);
-
-      try {
-        // Verificar sessão atual
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user && isMounted) {
-          await carregarPerfil(session.user);
-        } else if (isMounted) {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar sessão:', error);
-        if (isMounted) setLoading(false);
-      } finally {
-        clearTimeout(timeoutId);
-        isInitializing = false;
-      }
-    }
-
-    async function carregarPerfil(supabaseUser: User) {
+    async function carregarPerfil(supabaseUser: User, isMounted: boolean) {
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -135,20 +102,45 @@ export function useAuth() {
       }
     }
 
+    async function initialize() {
+      if (isInitializing) return;
+      isInitializing = true;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user && isMounted) {
+          await carregarPerfil(session.user, isMounted);
+        } else if (isMounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar sessão:', error);
+        if (isMounted) setLoading(false);
+      } finally {
+        isInitializing = false;
+      }
+    }
+
     initialize();
 
     // Escutar mudanças na autenticação
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!isMounted) return;
         
-        if (session?.user) {
-          setLoading(true);
-          await carregarPerfil(session.user);
-        } else {
+        // CORREÇÃO: Só atualiza se o evento for SIGNED_IN ou SIGNED_OUT
+        // Ignora eventos como TOKEN_REFRESHED que não devem resetar o loading
+        if (event === 'SIGNED_IN') {
+          if (session?.user) {
+            setLoading(true);
+            await carregarPerfil(session.user, isMounted);
+          }
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
         }
+        // Para outros eventos (como TOKEN_REFRESHED), não faz nada
       }
     );
 
@@ -156,7 +148,6 @@ export function useAuth() {
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       if (subscription?.subscription) {
         subscription.subscription.unsubscribe();
       }
@@ -179,14 +170,8 @@ export function useAuth() {
     if (error) throw error;
   };
 
-  const isGestor = () => {
-    return user?.nivel === 'gestor';
-  };
+  const isGestor = () => user?.nivel === 'gestor';
+  const isAdmin = () => user?.nivel === 'administrador';
 
-  const isAdmin = () => {
-    return user?.nivel === 'administrador';
-  };
-
-  // Retorno único com todas as funções
   return { user, loading, login, logout, resetPassword, isGestor, isAdmin };
 }
