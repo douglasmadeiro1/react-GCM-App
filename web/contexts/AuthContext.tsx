@@ -1,9 +1,18 @@
-// contexts/AuthContext.tsx
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from 'react';
 import { supabase } from '../shared/services/supabase';
-import { User } from '@supabase/supabase-js';
+import {
+  User,
+  AuthChangeEvent,
+  Session,
+} from '@supabase/supabase-js';
 
 export interface AuthUser {
   id: string;
@@ -67,25 +76,16 @@ interface AuthContextType {
   isAdmin: () => boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-// Cache global
-let globalUser: AuthUser | null = null;
-let globalLoading = false;
-let initialized = false;
-let lastEventTime = 0;
-let lastEventType = '';
-const EVENT_COOLDOWN = 2000; // 2 segundos de cooldown para eventos
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(globalUser);
-  const [loading, setLoading] = useState(globalLoading);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-  const initializingRef = useRef(false);
 
   async function carregarPerfil(supabaseUser: User) {
     try {
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', supabaseUser.id)
@@ -94,121 +94,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mountedRef.current) return;
 
       const nivel = profile?.nivel_usuario || 'default';
-      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
+      const nome =
+        profile?.nome ||
+        supabaseUser.email?.split('@')[0] ||
+        'Usuário';
 
-      const newUser: AuthUser = {
+      setUser({
         id: supabaseUser.id,
         email: supabaseUser.email!,
         nome,
         nivel,
         permissoes: PERMISSOES_POR_NIVEL[nivel],
-      };
-      
-      globalUser = newUser;
-      setUser(newUser);
+      });
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
-      if (mountedRef.current && !globalUser) {
-        const fallbackUser: AuthUser = {
-          id: supabaseUser.id,
-          email: supabaseUser.email!,
-          nome: supabaseUser.email?.split('@')[0] || 'Usuário',
-          nivel: 'default',
-          permissoes: PERMISSOES_POR_NIVEL.default,
-        };
-        globalUser = fallbackUser;
-        setUser(fallbackUser);
-      }
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-        globalLoading = false;
-      }
-    }
-  }
-
-  async function initialize() {
-    if (initializingRef.current || initialized) return;
-    initializingRef.current = true;
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user && mountedRef.current) {
-        await carregarPerfil(session.user);
-      } else if (mountedRef.current) {
-        setLoading(false);
-        globalLoading = false;
-      }
-    } catch (error) {
-      console.error('Erro ao verificar sessão:', error);
-      if (mountedRef.current) {
-        setLoading(false);
-        globalLoading = false;
-      }
-    } finally {
-      initializingRef.current = false;
-      initialized = true;
+      if (mountedRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     mountedRef.current = true;
-    
-    if (!initialized) {
-      initialize();
-    } else {
-      setUser(globalUser);
-      setLoading(globalLoading);
-    }
 
-    const { data: authData } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mountedRef.current) return;
-        
-        const now = Date.now();
-        const isDuplicateEvent = (
-          event === lastEventType && 
-          (now - lastEventTime) < EVENT_COOLDOWN
-        );
-        
-        console.log('[Auth] Evento:', event, isDuplicateEvent ? '(IGNORADO - duplicado)' : '');
-        
-        // IGNORA EVENTOS DUPLICADOS
-        if (isDuplicateEvent) {
-          return;
-        }
-        
-        lastEventTime = now;
-        lastEventType = event;
-        
-        // Só processa SIGNED_IN se NÃO tiver usuário já logado
-        if (event === 'SIGNED_IN' && session?.user) {
-          // Se já temos um usuário, ignora o evento duplicado
-          if (globalUser && globalUser.id === session.user.id) {
-            console.log('[Auth] Usuário já logado, ignorando SIGNED_IN');
-            return;
-          }
-          
-          setLoading(true);
+    const init = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user) {
           await carregarPerfil(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          globalUser = null;
-          globalLoading = false;
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao iniciar sessão:', error);
+        setLoading(false);
+      }
+    };
+
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event: AuthChangeEvent, session: Session | null) => {
+        if (!mountedRef.current) return;
+
+        if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          await carregarPerfil(session.user);
         }
       }
     );
 
     return () => {
       mountedRef.current = false;
-      authData?.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
   };
 
@@ -223,21 +176,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const isGestor = () => user?.nivel === 'gestor';
-  const isAdmin = () => user?.nivel === 'administrador';
-
-  const value: AuthContextType = {
-    user,
-    loading,
-    login,
-    logout,
-    resetPassword,
-    isGestor,
-    isAdmin
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        resetPassword,
+        isGestor: () => user?.nivel === 'gestor',
+        isAdmin: () => user?.nivel === 'administrador',
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -246,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
 }
