@@ -69,7 +69,7 @@ const PERMISSOES_POR_NIVEL: Record<string, Permissoes> = {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   isGestor: () => boolean;
@@ -81,17 +81,29 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+
   const mountedRef = useRef(true);
+  const initializingRef = useRef(true);
+
+  // 🔥 Evita múltiplas execuções simultâneas
+  const loadingProfileRef = useRef(false);
 
   async function carregarPerfil(supabaseUser: User) {
+    if (loadingProfileRef.current) return;
+    loadingProfileRef.current = true;
+
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .maybeSingle();
 
       if (!mountedRef.current) return;
+
+      if (error) {
+        console.error('Erro ao buscar profile:', error);
+      }
 
       const nivel = profile?.nivel_usuario || 'default';
       const nome =
@@ -109,7 +121,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      loadingProfileRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+        initializingRef.current = false;
+      }
     }
   }
 
@@ -122,14 +138,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: { session },
         } = await supabase.auth.getSession();
 
+        if (!mountedRef.current) return;
+
         if (session?.user) {
           await carregarPerfil(session.user);
         } else {
+          setUser(null);
           setLoading(false);
+          initializingRef.current = false;
         }
       } catch (error) {
         console.error('Erro ao iniciar sessão:', error);
         setLoading(false);
+        initializingRef.current = false;
       }
     };
 
@@ -139,14 +160,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event: AuthChangeEvent, session: Session | null) => {
         if (!mountedRef.current) return;
 
+        // 🔥 Ignora eventos durante inicialização
+        if (initializingRef.current) return;
+
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
           return;
         }
 
-        if (session?.user) {
-          await carregarPerfil(session.user);
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            await carregarPerfil(session.user);
+          }
         }
       }
     );
@@ -158,15 +184,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      return true;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      return false;
+    }
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
+    setUser(null);
   };
 
   const resetPassword = async (email: string) => {
