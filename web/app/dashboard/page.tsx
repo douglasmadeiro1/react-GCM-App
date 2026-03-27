@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '../../shared/hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 
 // Definição dos módulos com imagens
-const modules = [
+const MODULES = [
   {
     id: 'documents',
     name: 'Documentos',
@@ -85,24 +85,21 @@ const modules = [
 export default function DashboardPage() {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
-
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
+  // Redirecionar se não estiver autenticado (apenas uma vez)
   useEffect(() => {
-    if (user) {
-      carregarNotificacoes();
+    if (!authLoading && !user && !isRedirecting) {
+      setIsRedirecting(true);
+      router.replace('/login');
     }
-  }, [user]);
+  }, [user, authLoading, router, isRedirecting]);
 
-  const carregarNotificacoes = async () => {
-    // Carregar notificações vencidas
+  const carregarNotificacoes = useCallback(async () => {
     try {
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      
-      // Aqui você pode buscar do Supabase as notificações
-      // Por enquanto, vamos usar dados mockados
+      // Simulação de notificações - substitua pela chamada real
       const notificacoesMock = [
         { id: 1, message: 'Notificação de postura vencida', link: '/notifications', type: 'postura' },
       ];
@@ -110,13 +107,20 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      carregarNotificacoes();
+    }
+  }, [user, carregarNotificacoes]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
+  // Evitar renderização enquanto verifica autenticação
   if (authLoading) {
     return (
       <div className="flex min-h-screen">
@@ -134,8 +138,8 @@ export default function DashboardPage() {
   if (!user) return null;
 
   // Filtrar módulos baseado nas permissões do usuário
-  const visibleModules = modules.filter(module => {
-    if (module.permission === 'podeGerenciarUsuarios') {
+  const visibleModules = MODULES.filter((mod) => {
+    if (mod.permission === 'podeGerenciarUsuarios') {
       return user.nivel === 'gestor';
     }
     return true; // Todos podem visualizar os outros módulos
@@ -154,32 +158,33 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {visibleModules.map((module) => (
+          {visibleModules.map((mod) => (
             <div
-              key={module.id}
-              onClick={() => router.push(module.path)}
+              key={mod.id}
+              onClick={() => router.push(mod.path)}
               className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 overflow-hidden group"
             >
-              <div className={`h-2 bg-gradient-to-r ${module.color}`} />
+              <div className={`h-2 bg-gradient-to-r ${mod.color}`} />
               <div className="p-6 text-center">
                 <div className="relative w-32 h-32 mx-auto mb-4">
                   <Image
-                    src={module.icon}
-                    alt={module.name}
+                    src={mod.icon}
+                    alt={mod.name}
                     fill
                     className="object-contain group-hover:scale-105 transition-transform"
+                    unoptimized
                   />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  {module.name}
+                  {mod.name}
                 </h3>
-                <p className="text-sm text-gray-500">{module.description}</p>
+                <p className="text-sm text-gray-500">{mod.description}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Notificações - versão simplificada com badge */}
+        {/* Notificações */}
         <div className="fixed bottom-4 right-4 z-50">
           <div className="relative">
             <button
