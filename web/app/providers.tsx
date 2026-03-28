@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/shared/hooks/useAuth';
 import { SessionKeepAlive } from '@/components/SessionKeepAlive';
+import { AutoRefresh } from '@/components/AutoRefresh';
 import { useState, useEffect } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -12,10 +13,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000, // 5 minutos
-            gcTime: 10 * 60 * 1000, // 10 minutos
+            staleTime: 5 * 60 * 1000,
+            gcTime: 10 * 60 * 1000,
             retry: 1,
-            refetchOnWindowFocus: false, // DESATIVADO - essencial para evitar o bug
+            refetchOnWindowFocus: false,
             refetchOnMount: true,
             refetchOnReconnect: true,
             retryOnMount: false,
@@ -24,10 +25,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
-  // Limpa queries quando o usuário fecha a aba
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Marca queries como inválidas mas não limpa tudo
       queryClient.invalidateQueries({ predicate: () => true });
     };
 
@@ -39,6 +38,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <SessionKeepAlive />
+        <AutoRefresh />
         {children}
       </AuthProvider>
     </QueryClientProvider>

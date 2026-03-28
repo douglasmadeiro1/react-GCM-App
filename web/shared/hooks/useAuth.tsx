@@ -27,6 +27,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  checkSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -38,8 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isLoadingRef = useRef(false);
   const mountedRef = useRef(true);
+  const initialCheckDone = useRef(false);
 
-  const carregarPerfil = useCallback(async (supabaseUser: User) => {
+  const carregarPerfil = useCallback(async (supabaseUser: User): Promise<AuthUser | null> => {
     if (!mountedRef.current) return null;
     
     try {
@@ -68,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(authUser);
         // Armazena no cache do React Query
         queryClient.setQueryData(['auth-user'], authUser);
+        queryClient.setQueryData(['user', supabaseUser.id], profile);
       }
 
       return authUser;
@@ -79,6 +82,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
   }, [queryClient]);
+
+  const checkSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('[checkSession] Erro:', error);
+        return false;
+      }
+
+      if (session?.user) {
+        const authUser = await carregarPerfil(session.user);
+        return !!authUser;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('[checkSession] Erro inesperado:', error);
+      return false;
+    }
+  }, [carregarPerfil]);
 
   const refreshUser = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -94,9 +118,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // sessão inicial
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (session?.user) {
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+          setUser(null);
+        } else if (session?.user) {
           await carregarPerfil(session.user);
         } else {
           setUser(null);
@@ -108,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mountedRef.current) {
           setLoading(false);
           isLoadingRef.current = false;
+          initialCheckDone.current = true;
         }
       }
     };
@@ -121,36 +149,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!mountedRef.current) return;
 
-        // Evita processamento duplicado
-        if (isLoadingRef.current && event === 'TOKEN_REFRESHED') {
-          return;
-        }
-
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setLoading(false);
-          // Limpa cache do React Query
+          // Limpa todo o cache
           queryClient.clear();
           // Redireciona para login
           router.push('/login');
           return;
         }
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_IN') {
           if (session?.user) {
             await carregarPerfil(session.user);
-            // Invalida queries que dependem do usuário, mas não a de auth
-            queryClient.invalidateQueries({
-              predicate: (query) => {
-                const key = query.queryKey[0];
-                return key !== 'auth-user' && 
-                       key !== 'session' &&
-                       typeof key === 'string' &&
-                       !key.includes('auth');
-              }
-            });
+            // Recria o queryClient após login
+            queryClient.invalidateQueries();
           }
-        } else if (event === 'USER_UPDATED' && session?.user) {
+        }
+        
+        if (event === 'TOKEN_REFRESHED') {
+          // Só atualiza o perfil se já tiver usuário logado
+          if (session?.user && user) {
+            await carregarPerfil(session.user);
+          }
+        }
+        
+        if (event === 'USER_UPDATED' && session?.user) {
           await carregarPerfil(session.user);
         }
       }
@@ -160,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [carregarPerfil, queryClient, router]);
+  }, [carregarPerfil, queryClient, router, user]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -193,7 +217,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      logout, 
+      refreshUser,
+      checkSession 
+    }}>
       {children}
     </AuthContext.Provider>
   );
