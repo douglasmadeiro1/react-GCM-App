@@ -15,15 +15,15 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navigation = [
-  { name: 'Dashboard', icon: '📊', path: '/dashboard' },
-  { name: 'Equipe', icon: '👥', path: '/agents' },
-  { name: 'Patrimônio', icon: '🔫', path: '/patrimonio' },
-  { name: 'Viaturas', icon: '🚓', path: '/vehicles' },      // ← Adicionar esta linha
-  { name: 'Combustível', icon: '⛽', path: '/fuel' },
-  { name: 'Autuações', icon: '📝', path: '/infringements' },
-  { name: 'Notificações', icon: '🔔', path: '/notifications' },
-  { name: 'Documentos', icon: '📄', path: '/documents' },
-];
+    { name: 'Dashboard', icon: '📊', path: '/dashboard' },
+    { name: 'Equipe', icon: '👥', path: '/agents' },
+    { name: 'Patrimônio', icon: '🔫', path: '/patrimonio' },
+    { name: 'Viaturas', icon: '🚓', path: '/vehicles' },
+    { name: 'Combustível', icon: '⛽', path: '/fuel' },
+    { name: 'Autuações', icon: '📝', path: '/infringements' },
+    { name: 'Notificações', icon: '🔔', path: '/notifications' },
+    { name: 'Documentos', icon: '📄', path: '/documents' },
+  ];
 
   // Adicionar gerenciamento de usuários apenas para gestores
   if (userLevel === 'gestor') {
@@ -36,6 +36,11 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
       case 'administrador': return 'Administrador';
       default: return 'Usuário';
     }
+  };
+
+  const handleLogout = () => {
+    console.log('[Sidebar] Botão Sair clicado');
+    onLogout();
   };
 
   return (
@@ -56,6 +61,7 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="p-1 rounded hover:bg-gray-800 transition"
+            aria-label={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {isCollapsed ? '→' : '←'}
           </button>
@@ -64,8 +70,8 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
         {/* User Info */}
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-lg">
-              {userName.charAt(0).toUpperCase()}
+            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-lg font-semibold">
+              {userName && userName !== 'Carregando...' ? userName.charAt(0).toUpperCase() : '?'}
             </div>
             {!isCollapsed && (
               <div className="flex-1">
@@ -77,7 +83,7 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4">
+        <nav className="flex-1 py-4 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = pathname === item.path;
             return (
@@ -100,8 +106,9 @@ export default function Sidebar({ userName, userLevel, onLogout }: SidebarProps)
         {/* Logout Button */}
         <div className="p-4 border-t border-gray-800">
           <button
-            onClick={onLogout}
+            onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-2 text-gray-300 hover:bg-gray-800 rounded transition"
+            aria-label="Sair do sistema"
           >
             <span className="text-xl">🚪</span>
             {!isCollapsed && <span>Sair</span>}

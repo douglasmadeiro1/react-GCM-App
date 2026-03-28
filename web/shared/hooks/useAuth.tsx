@@ -1,3 +1,4 @@
+// shared/hooks/useAuth.tsx
 'use client';
 
 import React, {
@@ -31,30 +32,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const carregarPerfil = useCallback(async (supabaseUser: User) => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', supabaseUser.id)
-      .maybeSingle();
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .maybeSingle();
 
-    const nivel = profile?.nivel_usuario || 'default';
-    const nome =
-      profile?.nome ||
-      supabaseUser.email?.split('@')[0] ||
-      'Usuário';
+      const nivel = profile?.nivel_usuario || 'default';
+      const nome = profile?.nome || supabaseUser.email?.split('@')[0] || 'Usuário';
 
-    setUser({
-      id: supabaseUser.id,
-      email: supabaseUser.email!,
-      nome,
-      nivel,
-    });
-
-    setLoading(false);
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email!,
+        nome,
+        nivel,
+      });
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    // 🔹 sessão inicial
+    // sessão inicial
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
         carregarPerfil(data.session.user);
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 🔹 listener
+    // listener
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         console.log('[Auth Evento]:', event);
@@ -98,8 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null); // 🔥 garante limpeza imediata
+    console.log('[useAuth] Iniciando logout...');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+      console.log('[useAuth] Logout concluído com sucesso');
+    } catch (error) {
+      console.error('[useAuth] Erro no logout:', error);
+      throw error;
+    }
   };
 
   return (

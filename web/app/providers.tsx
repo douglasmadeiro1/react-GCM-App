@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/shared/hooks/useAuth';
+import { SessionKeepAlive } from '@/components/SessionKeepAlive';
 import { useState } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <SessionKeepAlive />
+        {children}
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
