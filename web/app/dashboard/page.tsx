@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '../../shared/services/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../shared/hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 
 export default function DashboardPage() {

@@ -1,13 +1,13 @@
 'use client';
 
-import {
+import React, {
   createContext,
   useContext,
   useEffect,
   useState,
   useCallback,
 } from 'react';
-import { supabase } from '../shared/services/supabase';
+import { supabase } from '../../shared/services/supabase';
 import { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export interface AuthUser {
