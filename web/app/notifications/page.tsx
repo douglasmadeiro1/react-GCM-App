@@ -252,7 +252,7 @@ export default function NotificationsPage() {
           {filteredNotifications?.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <i className="fa-solid fa-bell text-4xl mb-3 opacity-50"></i>
-              <p>Nenhuma notificação encontrada</p>
+              <p>Nenhuma notificação encontrada!</p>
             </div>
           )}
         </div>
