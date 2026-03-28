@@ -1,27 +1,45 @@
-// components/VisibilityHandler.tsx
+// web/components/VisibilityHandler.tsx
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function VisibilityHandler() {
-  const lastRunRef = useRef<number>(0);
+  const queryClient = useQueryClient();
+  const isInvalidatingRef = useRef(false);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      const now = Date.now();
-      // Limita a uma execução por segundo
-      if (!document.hidden && now - lastRunRef.current > 1000) {
-        lastRunRef.current = now;
-        console.log('[VisibilityHandler] Aba visível');
+      if (document.visibilityState === 'visible') {
+        console.log('[VisibilityHandler] Aba visível, recarregando dados...');
+        
+        // Evita múltiplas invalidações simultâneas
+        if (isInvalidatingRef.current) return;
+        
+        isInvalidatingRef.current = true;
+        
+        // Pequeno delay para evitar conflitos
+        setTimeout(() => {
+          // Recarrega apenas queries ativas, excluindo autenticação
+          queryClient.invalidateQueries({
+            predicate: (query) => {
+              const queryKey = query.queryKey;
+              // Exclui queries de autenticação e perfil
+              return !queryKey.includes('session') && 
+                     !queryKey.includes('auth-user') &&
+                     queryKey[0] !== 'user' &&
+                     !String(queryKey[0]).includes('profile');
+            }
+          }).finally(() => {
+            isInvalidatingRef.current = false;
+          });
+        }, 100);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [queryClient]);
 
   return null;
 }

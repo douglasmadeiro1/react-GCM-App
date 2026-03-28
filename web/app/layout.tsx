@@ -1,8 +1,9 @@
+// web/app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { VisibilityHandler } from '../components/VisibilityHandler';
+import { VisibilityHandler } from "@/components/VisibilityHandler";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

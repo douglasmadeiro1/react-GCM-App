@@ -1,3 +1,4 @@
+// web/shared/services/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://pzryuvurgcdpvdqgubyf.supabase.co';
@@ -9,5 +10,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce',
   },
 });
